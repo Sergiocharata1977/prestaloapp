@@ -1,0 +1,118 @@
+.page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 20px 1fr 20px;
+  align-items: center;
+  justify-items: center;
+  padding: 80px;
+  gap: 64px;
+}
+
+.main {
+  grid-row-start: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+.logo {
+  height: auto;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+  list-style-position: inside;
+  font-size: 14px;
+  line-height: 24px;
+}
+
+.list code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #f4f4f5;
+  font-family: "Courier New", Courier, monospace;
+}
+
+.ctaRow {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+
+.buttonPrimary,
+.buttonSecondary {
+  min-width: 180px;
+  height: 48px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.buttonPrimary {
+  background: #171717;
+  color: #ffffff;
+}
+
+.buttonPrimary:hover {
+  background: #2f2f2f;
+}
+
+.buttonSecondary {
+  background: #ffffff;
+  border-color: #d4d4d8;
+}
+
+.buttonSecondary:hover {
+  background: #f4f4f5;
+}
+
+.footer {
+  grid-row-start: 3;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.footerLink {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 32px;
+    padding-bottom: 80px;
+  }
+
+  .logo {
+    width: 180px;
+  }
+
+  .ctaRow {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .buttonPrimary,
+  .buttonSecondary {
+    width: 100%;
+  }
+}
