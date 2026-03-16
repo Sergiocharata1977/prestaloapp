@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 
 function getAdminApp() {
@@ -32,3 +33,10 @@ export function getAdminFirestore() {
 }
 
 export const adminDb = getAdminFirestore();
+
+export const auth = {
+  verifyIdToken: (token: string) => getAuth(getAdminApp()).verifyIdToken(token),
+  verifySessionCookie: (cookie: string, checkRevoked?: boolean) =>
+    getAuth(getAdminApp()).verifySessionCookie(cookie, checkRevoked),
+  getUser: (uid: string) => getAuth(getAdminApp()).getUser(uid),
+};
