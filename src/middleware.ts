@@ -1,43 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { auth as adminAuth } from "@/firebase/admin";
+// Edge Runtime — NO puede usar firebase-admin (Node.js APIs incompatibles)
+// Solo verifica presencia del token. La verificación real la hace withAuth en cada route.
 
 const PUBLIC_PATHS = new Set<string>(["/", "/api/health"]);
 
-function getBearerToken(request: NextRequest): string | null {
+function hasTokenPresent(request: NextRequest): boolean {
   const authHeader =
-    request.headers.get("authorization") ?? request.headers.get("Authorization");
+    request.headers.get("authorization") ??
+    request.headers.get("Authorization");
 
-  if (!authHeader?.startsWith("Bearer ")) {
-    return null;
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice("Bearer ".length).trim();
+    if (token.length > 0) return true;
   }
 
-  const token = authHeader.slice("Bearer ".length).trim();
-  return token.length > 0 ? token : null;
-}
-
-async function hasValidAuth(request: NextRequest): Promise<boolean> {
-  const bearerToken = getBearerToken(request);
-  const sessionCookie = request.cookies.get("session")?.value ?? null;
-
-  try {
-    if (bearerToken) {
-      await adminAuth.verifyIdToken(bearerToken);
-      return true;
-    }
-
-    if (sessionCookie) {
-      await adminAuth.verifySessionCookie(sessionCookie, true);
-      return true;
-    }
-  } catch {
-    return false;
-  }
+  if (request.cookies.has("session")) return true;
 
   return false;
 }
 
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (PUBLIC_PATHS.has(pathname)) {
@@ -52,8 +35,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const isAuthorized = await hasValidAuth(request);
-  if (!isAuthorized) {
+  if (!hasTokenPresent(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -61,5 +43,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/api/health", "/api/fin/:path*"],
+  matcher: ["/api/fin/:path*"],
 };
