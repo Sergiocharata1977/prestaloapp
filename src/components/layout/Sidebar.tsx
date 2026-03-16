@@ -8,6 +8,7 @@ import {
   CreditCard,
   LayoutDashboard,
   Scale,
+  TableProperties,
   Wallet,
   Users,
 } from "lucide-react";
@@ -20,7 +21,8 @@ const items = [
   { href: "/cobros", label: "Cobros", icon: Wallet },
   { href: "/cajas", label: "Cajas", icon: BriefcaseBusiness },
   { href: "/plan-cuentas", label: "Plan de Cuentas", icon: BookOpenText },
-  { href: "/libro-diario", label: "Libro Diario", icon: Scale },
+  { href: "/asientos", label: "Libro Diario", icon: Scale },
+  { href: "/asientos/mayor", label: "Mayor", icon: TableProperties },
 ];
 
 export function Sidebar() {

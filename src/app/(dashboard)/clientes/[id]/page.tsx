@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import type { FinCliente } from "@/types/fin-cliente";
 import type { FinCredito } from "@/types/fin-credito";
+import type { FinCobro } from "@/types/fin-cobro";
 import { apiFetch } from "@/lib/apiFetch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +43,45 @@ const creditoColumns: Column<FinCredito>[] = [
   { key: "fecha_otorgamiento", header: "Fecha" },
 ];
 
+const cobroColumns: Column<FinCobro>[] = [
+  { key: "fecha_cobro", header: "Fecha", render: (r) => r.fecha_cobro.slice(0, 10) },
+  {
+    key: "numero_cuota",
+    header: "Cuota",
+    render: (r) => `#${r.numero_cuota}`,
+  },
+  {
+    key: "capital_cobrado",
+    header: "Capital",
+    render: (r) => ars(r.capital_cobrado),
+    className: "text-right font-mono",
+  },
+  {
+    key: "interes_cobrado",
+    header: "Interés",
+    render: (r) => ars(r.interes_cobrado),
+    className: "text-right font-mono",
+  },
+  {
+    key: "total_cobrado",
+    header: "Total",
+    render: (r) => ars(r.total_cobrado),
+    className: "text-right font-mono font-semibold",
+  },
+  {
+    key: "medio_pago",
+    header: "Medio",
+    render: (r) => <Badge variant="outline">{r.medio_pago}</Badge>,
+  },
+];
+
+type CuentaCorrienteData = {
+  cobros: FinCobro[];
+  total_cobrado: number;
+  total_capital: number;
+  total_intereses: number;
+};
+
 export default function ClienteDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -49,6 +89,7 @@ export default function ClienteDetailPage() {
 
   const [cliente, setCliente] = useState<FinCliente | null>(null);
   const [creditos, setCreditos] = useState<FinCredito[]>([]);
+  const [cuentaCorriente, setCuentaCorriente] = useState<CuentaCorrienteData | null>(null);
   const [loading, setLoading] = useState(true);
   const [consultandoNosis, setConsultandoNosis] = useState(false);
 
@@ -57,10 +98,12 @@ export default function ClienteDetailPage() {
     Promise.all([
       apiFetch(`/api/fin/clientes/${id}`).then((r) => r.json()),
       apiFetch(`/api/fin/creditos?clienteId=${id}`).then((r) => r.json()),
+      apiFetch(`/api/fin/clientes/${id}/cuenta-corriente`).then((r) => r.json()),
     ])
-      .then(([clienteData, creditosData]) => {
+      .then(([clienteData, creditosData, ccData]) => {
         setCliente(clienteData as FinCliente);
         setCreditos((creditosData as { creditos: FinCredito[] }).creditos ?? []);
+        setCuentaCorriente(ccData as CuentaCorrienteData);
       })
       .finally(() => setLoading(false));
   }, [id]);
@@ -198,6 +241,31 @@ export default function ClienteDetailPage() {
           data={creditos}
           emptyMessage="Sin créditos registrados."
           onRowClick={(row) => router.push(`/creditos/${row.id}`)}
+        />
+      </div>
+
+      {/* Cuenta corriente */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900">Cuenta corriente</h3>
+          {cuentaCorriente && (
+            <div className="flex gap-3">
+              <Badge variant="outline" className="font-mono">
+                Capital: {ars(cuentaCorriente.total_capital)}
+              </Badge>
+              <Badge variant="outline" className="font-mono">
+                Intereses: {ars(cuentaCorriente.total_intereses)}
+              </Badge>
+              <Badge className="bg-green-100 text-green-800 font-mono">
+                Total cobrado: {ars(cuentaCorriente.total_cobrado)}
+              </Badge>
+            </div>
+          )}
+        </div>
+        <DataTable
+          columns={cobroColumns}
+          data={cuentaCorriente?.cobros ?? []}
+          emptyMessage="Sin cobros registrados."
         />
       </div>
     </div>
