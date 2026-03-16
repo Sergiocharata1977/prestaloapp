@@ -1,11 +1,13 @@
 import { FIN_COLLECTIONS } from '@/firebase/collections';
-import { getAdminFirestore } from '@/lib/firebase/admin';
+import { getAdminFirestore } from '@/firebase/admin';
 import type {
   FinCliente,
   FinClienteCreateInput,
   FinClienteNosisUltimo,
 } from '@/types/fin-cliente';
 import { FieldValue } from 'firebase-admin/firestore';
+
+type FinClienteUpdateInput = Partial<FinClienteCreateInput>;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -17,6 +19,16 @@ function normalizeDigits(value: string | undefined): string {
 
 function normalizeText(value: string | undefined): string {
   return (value || '').trim().toLowerCase();
+}
+
+function optionalTextUpdate(value: string | undefined) {
+  const normalized = value?.trim() || undefined;
+  return normalized ?? FieldValue.delete();
+}
+
+function optionalDigitsUpdate(value: string | undefined) {
+  const normalized = normalizeDigits(value) || undefined;
+  return normalized ?? FieldValue.delete();
 }
 
 function prefixBounds(value: string) {
@@ -123,6 +135,20 @@ export class ClienteService {
     } as FinCliente;
   }
 
+  static async list(orgId: string, limit = 50): Promise<FinCliente[]> {
+    const db = getAdminFirestore();
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    const snapshot = await db
+      .collection(FIN_COLLECTIONS.clientes(orgId))
+      .orderBy('updated_at', 'desc')
+      .limit(safeLimit)
+      .get();
+
+    return snapshot.docs
+      .map(doc => mapDoc(doc))
+      .filter((cliente): cliente is FinCliente => Boolean(cliente));
+  }
+
   static async buscar(orgId: string, query: string): Promise<FinCliente[]> {
     const db = getAdminFirestore();
     const raw = query.trim();
@@ -181,6 +207,106 @@ export class ClienteService {
     return [...seen.values()].sort((a, b) =>
       a.nombre.localeCompare(b.nombre, 'es')
     );
+  }
+
+  static async actualizar(
+    orgId: string,
+    clienteId: string,
+    input: FinClienteUpdateInput
+  ): Promise<FinCliente | null> {
+    const db = getAdminFirestore();
+    const ref = db.doc(FIN_COLLECTIONS.cliente(orgId, clienteId));
+    const snapshot = await ref.get();
+
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    const actual = mapDoc(snapshot);
+    if (!actual) {
+      return null;
+    }
+
+    const updates: Record<string, unknown> = {
+      updated_at: nowIso(),
+    };
+
+    if (typeof input.tipo === 'string') {
+      updates.tipo = input.tipo;
+    }
+
+    if (typeof input.nombre === 'string') {
+      const nombre = input.nombre.trim();
+      if (!nombre) {
+        throw new Error('El nombre es requerido');
+      }
+      updates.nombre = nombre;
+      updates.nombre_normalized = normalizeText(nombre);
+    }
+
+    if ('apellido' in input) {
+      updates.apellido = optionalTextUpdate(input.apellido);
+      updates.apellido_normalized = normalizeText(input.apellido) || FieldValue.delete();
+    }
+
+    if ('dni' in input) {
+      const dni = normalizeDigits(input.dni) || undefined;
+      updates.dni = optionalDigitsUpdate(input.dni);
+      updates.dni_normalized = dni || FieldValue.delete();
+    }
+
+    if ('cuit' in input) {
+      const cuit = normalizeDigits(input.cuit);
+      if (!cuit) {
+        throw new Error('El CUIT es requerido');
+      }
+
+      if (cuit !== actual.cuit) {
+        const existente = await this.getByCuit(orgId, cuit);
+        if (existente && existente.id !== clienteId) {
+          throw new Error('Ya existe un cliente con ese CUIT');
+        }
+      }
+
+      updates.cuit = cuit;
+      updates.cuit_normalized = cuit;
+    }
+
+    if ('telefono' in input) {
+      updates.telefono = optionalTextUpdate(input.telefono);
+    }
+
+    if ('email' in input) {
+      updates.email = optionalTextUpdate(input.email);
+    }
+
+    if ('domicilio' in input) {
+      updates.domicilio = optionalTextUpdate(input.domicilio);
+    }
+
+    if ('localidad' in input) {
+      updates.localidad = optionalTextUpdate(input.localidad);
+    }
+
+    if ('provincia' in input) {
+      updates.provincia = optionalTextUpdate(input.provincia);
+    }
+
+    await ref.update(updates);
+    return this.getById(orgId, clienteId);
+  }
+
+  static async eliminar(orgId: string, clienteId: string): Promise<boolean> {
+    const db = getAdminFirestore();
+    const ref = db.doc(FIN_COLLECTIONS.cliente(orgId, clienteId));
+    const snapshot = await ref.get();
+
+    if (!snapshot.exists) {
+      return false;
+    }
+
+    await ref.delete();
+    return true;
   }
 
   static async actualizarNosisUltimo(

@@ -1,4 +1,4 @@
-import { adminDb } from '@/firebase/admin';
+import { getAdminFirestore } from '@/firebase/admin';
 import { FIN_COLLECTIONS } from '@/firebase/collections';
 import type { FinAsiento, FinAsientoLinea } from '@/types/fin-asiento';
 import type { FinCobro } from '@/types/fin-cobro';
@@ -81,9 +81,10 @@ export class JournalEntryService {
     ];
 
     this.validarBalance(lineas);
+    const db = getAdminFirestore();
 
     const asiento = this.buildAsiento({
-      id: adminDb.collection(FIN_COLLECTIONS.asientos(credito.organization_id)).doc().id,
+      id: db.collection(FIN_COLLECTIONS.asientos(credito.organization_id)).doc().id,
       organization_id: credito.organization_id,
       sucursal_id: credito.sucursal_id,
       origen: 'credito_otorgado',
@@ -95,7 +96,7 @@ export class JournalEntryService {
       usuarioNombre,
     });
 
-    await adminDb
+    await db
       .doc(FIN_COLLECTIONS.asiento(credito.organization_id, asiento.id))
       .set(asiento);
 
@@ -109,7 +110,11 @@ export class JournalEntryService {
     cajaAccountId: string,
     config: FinConfigCuentas,
     usuarioId: string,
-    usuarioNombre: string
+    usuarioNombre: string,
+    options: {
+      transaction?: FirebaseFirestore.Transaction;
+      asientoId?: string;
+    } = {}
   ): Promise<string> {
     const [
       cuentaCaja,
@@ -117,10 +122,18 @@ export class JournalEntryService {
       cuentaInteresesNoDevengados,
       cuentaInteresesGanados,
     ] = await Promise.all([
-      this.getCuenta(cobro.organization_id, cajaAccountId),
-      this.getCuenta(cobro.organization_id, config.cuentas.creditos_por_financiaciones),
-      this.getCuenta(cobro.organization_id, config.cuentas.intereses_no_devengados),
-      this.getCuenta(cobro.organization_id, config.cuentas.intereses_ganados),
+      this.getCuenta(cobro.organization_id, cajaAccountId, options),
+      this.getCuenta(
+        cobro.organization_id,
+        config.cuentas.creditos_por_financiaciones,
+        options
+      ),
+      this.getCuenta(
+        cobro.organization_id,
+        config.cuentas.intereses_no_devengados,
+        options
+      ),
+      this.getCuenta(cobro.organization_id, config.cuentas.intereses_ganados, options),
     ]);
 
     const lineas: FinAsientoLinea[] = [
@@ -157,9 +170,14 @@ export class JournalEntryService {
     ];
 
     this.validarBalance(lineas);
+    const db = getAdminFirestore();
+    const asientoId =
+      options.asientoId ??
+      db.collection(FIN_COLLECTIONS.asientos(cobro.organization_id)).doc().id;
+    const asientoRef = db.doc(FIN_COLLECTIONS.asiento(cobro.organization_id, asientoId));
 
     const asiento = this.buildAsiento({
-      id: adminDb.collection(FIN_COLLECTIONS.asientos(cobro.organization_id)).doc().id,
+      id: asientoId,
       organization_id: cobro.organization_id,
       sucursal_id: cobro.sucursal_id,
       origen: 'cobro_cuota',
@@ -171,9 +189,11 @@ export class JournalEntryService {
       usuarioNombre,
     });
 
-    await adminDb
-      .doc(FIN_COLLECTIONS.asiento(cobro.organization_id, asiento.id))
-      .set(asiento);
+    if (options.transaction) {
+      options.transaction.set(asientoRef, asiento);
+    } else {
+      await asientoRef.set(asiento);
+    }
 
     return asiento.id;
   }
@@ -193,9 +213,16 @@ export class JournalEntryService {
 
   static async getConfigCuentas(
     orgId: string,
-    plugin: string
+    plugin: string,
+    options: {
+      transaction?: FirebaseFirestore.Transaction;
+    } = {}
   ): Promise<FinConfigCuentas> {
-    const snap = await adminDb.doc(FIN_COLLECTIONS.configCuentas(orgId, plugin)).get();
+    const db = getAdminFirestore();
+    const ref = db.doc(FIN_COLLECTIONS.configCuentas(orgId, plugin));
+    const snap = options.transaction
+      ? await options.transaction.get(ref)
+      : await ref.get();
     if (!snap.exists) {
       throw new Error(
         `Configuracion de cuentas no encontrada para org=${orgId} plugin=${plugin}`
@@ -236,13 +263,20 @@ export class JournalEntryService {
 
   private static async getCuenta(
     orgId: string,
-    cuentaId: string
+    cuentaId: string,
+    options: {
+      transaction?: FirebaseFirestore.Transaction;
+    } = {}
   ): Promise<CuentaContable> {
     if (!cuentaId) {
       throw new Error('Cuenta contable requerida');
     }
 
-    const snap = await adminDb.doc(`${FIN_COLLECTIONS.cuentas(orgId)}/${cuentaId}`).get();
+    const db = getAdminFirestore();
+    const ref = db.doc(`${FIN_COLLECTIONS.cuentas(orgId)}/${cuentaId}`);
+    const snap = options.transaction
+      ? await options.transaction.get(ref)
+      : await ref.get();
     if (!snap.exists) {
       throw new Error(`Cuenta contable no encontrada: ${cuentaId}`);
     }

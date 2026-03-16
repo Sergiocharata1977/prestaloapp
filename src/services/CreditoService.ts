@@ -1,11 +1,11 @@
 import { FIN_COLLECTIONS } from '@/firebase/collections';
+import { getAdminFirestore } from '@/firebase/admin';
 import { AmortizationService } from '@/services/AmortizationService';
 import type { FinAsiento, FinAsientoLinea } from '@/types/fin-asiento';
 import type { FinConfigCuentas, FinCuenta } from '@/types/fin-plan-cuentas';
 import type { FinCredito, FinCreditoCreateInput, FinCreditoEstado } from '@/types/fin-credito';
 import type { FinCuota, FinCuotaEstado } from '@/types/fin-cuota';
 import { FieldValue } from 'firebase-admin/firestore';
-import { getAdminFirestore } from '@/lib/firebase/admin';
 
 type CreditoListFilters = {
   cliente_id?: string;

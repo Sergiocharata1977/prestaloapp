@@ -31,9 +31,20 @@ function parseIsoDateOnly(dateIso: string): Date {
   }
 
   const [, year, month, day] = match;
-  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  const yearNumber = Number(year);
+  const monthNumber = Number(month);
+  const dayNumber = Number(day);
+  const date = new Date(Date.UTC(yearNumber, monthNumber - 1, dayNumber));
 
   if (Number.isNaN(date.getTime())) {
+    throw new Error('La fecha de vencimiento es invalida');
+  }
+
+  if (
+    date.getUTCFullYear() !== yearNumber ||
+    date.getUTCMonth() !== monthNumber - 1 ||
+    date.getUTCDate() !== dayNumber
+  ) {
     throw new Error('La fecha de vencimiento es invalida');
   }
 

@@ -33,8 +33,10 @@ export interface FinCliente {
 export type FinClienteCreateInput = Omit<
   FinCliente,
   | 'id'
+  | 'organization_id'
   | 'creditos_activos_count'
   | 'saldo_total_adeudado'
   | 'created_at'
+  | 'created_by'
   | 'updated_at'
 >;

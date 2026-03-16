@@ -1,5 +1,5 @@
 import { FIN_COLLECTIONS } from '@/firebase/collections';
-import { getAdminFirestore } from '@/lib/firebase/admin';
+import { getAdminFirestore } from '@/firebase/admin';
 
 const CONSULTAS_SUBCOLLECTION = 'fin_consultas_nosis';
 const DEFAULT_TIMEOUT_MS = 15000;
