@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/api/withAuth';
 import { CobroService } from '@/services/CobroService';
+import { LedgerService } from '@/services/LedgerService';
 import type { FinCobroCreateInput } from '@/types/fin-cobro';
 
 const OPERATOR_ROLES = ['admin', 'gerente', 'operador'];
@@ -69,6 +70,27 @@ export const POST = withAuth(async (request, _context, authContext) => {
       authContext.user.uid,
       authContext.user.name || authContext.user.email || authContext.user.uid
     );
+
+    // Registrar en ledger de forma asíncrona — si falla no aborta la respuesta
+    CobroService.getById(orgId, result.cobroId)
+      .then((cobro) => {
+        if (!cobro) return;
+        const descripcion = `Cobro cuota ${cobro.numero_cuota ?? ''} - Crédito ${cobro.credito_id}`;
+        return LedgerService.registrarCobro(
+          orgId,
+          cobro.cliente_id,
+          {
+            id: cobro.id,
+            monto_total: cobro.total_cobrado,
+            credito_id: cobro.credito_id,
+            numero_cuota: cobro.numero_cuota,
+          },
+          descripcion
+        );
+      })
+      .catch((err: unknown) => {
+        console.error('[LedgerService] Error al registrar cobro en ledger:', err);
+      });
 
     return NextResponse.json({ success: true, data: result }, { status: 201 });
   } catch (error) {

@@ -1,5 +1,6 @@
 export const FIN_CAJAS = 'fin_cajas'
 export const FIN_COBROS = 'fin_cobros'
+export const FIN_LEDGER = 'fin_ledger_entries'
 
 export const FIN_COLLECTIONS = {
   orgBase: (orgId: string) => `organizations/${orgId}`,
@@ -29,6 +30,10 @@ export const FIN_COLLECTIONS = {
   configCuentas: (orgId: string, plugin: string) =>
     `organizations/${orgId}/fin_config_cuentas/${plugin}`,
 
+  ledgerEntries: (orgId: string) => `organizations/${orgId}/fin_ledger_entries`,
+  ledgerEntry: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_ledger_entries/${id}`,
+
   sucursales: (orgId: string) => `organizations/${orgId}/fin_sucursales`,
   sucursal: (orgId: string, id: string) =>
     `organizations/${orgId}/fin_sucursales/${id}`,
@@ -36,4 +41,8 @@ export const FIN_COLLECTIONS = {
     `organizations/${orgId}/fin_sucursales/${sucursalId}/fin_cajas`,
   caja: (orgId: string, sucursalId: string, cajaId: string) =>
     `organizations/${orgId}/fin_sucursales/${sucursalId}/fin_cajas/${cajaId}`,
+
+  evaluaciones: (orgId: string) => `organizations/${orgId}/fin_evaluaciones`,
+  evaluacion: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_evaluaciones/${id}`,
 } as const;

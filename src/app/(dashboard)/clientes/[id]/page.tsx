@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, ClipboardCheck, History, RefreshCw } from "lucide-react";
 import type { FinCliente } from "@/types/fin-cliente";
 import type { FinCredito } from "@/types/fin-credito";
 import type { FinCobro } from "@/types/fin-cobro";
@@ -225,6 +226,32 @@ export default function ClienteDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Evaluacion crediticia */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Evaluación crediticia (scoring)</CardTitle>
+          <div className="flex gap-2">
+            <Link href={`/clientes/${id}/evaluacion`}>
+              <Button size="sm">
+                <ClipboardCheck className="mr-2 h-4 w-4" />
+                Nueva evaluación
+              </Button>
+            </Link>
+            <Link href={`/clientes/${id}/evaluacion/historial`}>
+              <Button variant="outline" size="sm">
+                <History className="mr-2 h-4 w-4" />
+                Ver historial
+              </Button>
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-slate-400">
+            Realizá una nueva evaluación de riesgo crediticio o consultá el historial de evaluaciones anteriores.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Créditos */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -248,19 +275,27 @@ export default function ClienteDetailPage() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-900">Cuenta corriente</h3>
-          {cuentaCorriente && (
-            <div className="flex gap-3">
-              <Badge variant="outline" className="font-mono">
-                Capital: {ars(cuentaCorriente.total_capital)}
-              </Badge>
-              <Badge variant="outline" className="font-mono">
-                Intereses: {ars(cuentaCorriente.total_intereses)}
-              </Badge>
-              <Badge className="bg-green-100 text-green-800 font-mono">
-                Total cobrado: {ars(cuentaCorriente.total_cobrado)}
-              </Badge>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            <Link href={`/clientes/${id}/cuenta-corriente`}>
+              <Button variant="outline" size="sm">
+                <History className="h-3 w-3 mr-1" />
+                Cuenta corriente
+              </Button>
+            </Link>
+            {cuentaCorriente && (
+              <div className="flex gap-3">
+                <Badge variant="outline" className="font-mono">
+                  Capital: {ars(cuentaCorriente.total_capital)}
+                </Badge>
+                <Badge variant="outline" className="font-mono">
+                  Intereses: {ars(cuentaCorriente.total_intereses)}
+                </Badge>
+                <Badge className="bg-green-100 text-green-800 font-mono">
+                  Total cobrado: {ars(cuentaCorriente.total_cobrado)}
+                </Badge>
+              </div>
+            )}
+          </div>
         </div>
         <DataTable
           columns={cobroColumns}
