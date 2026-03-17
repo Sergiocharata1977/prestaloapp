@@ -1,3 +1,6 @@
+export const FIN_CAJAS = 'fin_cajas'
+export const FIN_COBROS = 'fin_cobros'
+
 export const FIN_COLLECTIONS = {
   orgBase: (orgId: string) => `organizations/${orgId}`,
 

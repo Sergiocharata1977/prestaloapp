@@ -15,7 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const items = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/creditos", label: "Créditos", icon: CreditCard },
   { href: "/cobros", label: "Cobros", icon: Wallet },
@@ -45,8 +45,7 @@ export function Sidebar() {
 
         <nav className="mt-6 grid gap-1">
           {items.map(({ href, icon: Icon, label }) => {
-            const isActive =
-              href === "/" ? pathname === href : pathname.startsWith(href);
+            const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
 
             return (
               <Link

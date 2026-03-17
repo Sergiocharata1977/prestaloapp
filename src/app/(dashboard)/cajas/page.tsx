@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
 import type { FinSucursal, FinCaja } from "@/types/fin-sucursal";
 import { apiFetch } from "@/lib/apiFetch";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -13,6 +16,7 @@ function ars(n: number) {
 type SucursalConCajas = FinSucursal & { cajas: FinCaja[] };
 
 export default function CajasPage() {
+  const router = useRouter();
   const [items, setItems] = useState<SucursalConCajas[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -58,11 +62,17 @@ export default function CajasPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-slate-900">Cajas</h2>
-        <p className="text-sm text-slate-500">
-          Saldos por sucursal y caja
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-slate-900">Cajas</h2>
+          <p className="text-sm text-slate-500">
+            Saldos por sucursal y caja
+          </p>
+        </div>
+        <Button onClick={() => router.push("/cajas/nuevo")}>
+          <Plus className="h-4 w-4" />
+          Abrir caja
+        </Button>
       </div>
 
       {items.map((s) => (
