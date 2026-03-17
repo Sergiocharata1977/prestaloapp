@@ -34,7 +34,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/");
+      router.replace("/clientes");
     }
   }, [loading, router, user]);
 
@@ -43,7 +43,7 @@ export default function LoginPage() {
 
     try {
       await signInWithEmailAndPassword(auth, values.email, values.password);
-      router.replace("/");
+      router.replace("/clientes");
     } catch {
       setSubmitError("No se pudo iniciar sesión. Verificá tus credenciales.");
     }
