@@ -33,7 +33,7 @@ type RouteHandler<
   authContext: AuthContext
 ) => Promise<Response> | Response;
 
-type WithAuthOptions = {
+export type WithAuthOptions = {
   roles?: string[];
 };
 

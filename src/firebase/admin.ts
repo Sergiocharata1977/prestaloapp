@@ -37,4 +37,13 @@ export const auth = {
   verifySessionCookie: (cookie: string, checkRevoked?: boolean) =>
     getAuth(getAdminApp()).verifySessionCookie(cookie, checkRevoked),
   getUser: (uid: string) => getAuth(getAdminApp()).getUser(uid),
+  listUsers: (maxResults?: number) => getAuth(getAdminApp()).listUsers(maxResults),
+  createUser: (properties: Parameters<ReturnType<typeof getAuth>["createUser"]>[0]) =>
+    getAuth(getAdminApp()).createUser(properties),
+  setCustomUserClaims: (uid: string, claims: object | null) =>
+    getAuth(getAdminApp()).setCustomUserClaims(uid, claims),
+  updateUser: (uid: string, properties: Parameters<ReturnType<typeof getAuth>["updateUser"]>[1]) =>
+    getAuth(getAdminApp()).updateUser(uid, properties),
+  generatePasswordResetLink: (email: string) =>
+    getAuth(getAdminApp()).generatePasswordResetLink(email),
 };
