@@ -32,8 +32,6 @@ export function getAdminFirestore() {
   return getFirestore(getAdminApp());
 }
 
-export const adminDb = getAdminFirestore();
-
 export const auth = {
   verifyIdToken: (token: string) => getAuth(getAdminApp()).verifyIdToken(token),
   verifySessionCookie: (cookie: string, checkRevoked?: boolean) =>

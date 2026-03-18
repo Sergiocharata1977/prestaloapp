@@ -1,1 +1,1 @@
-export { adminDb, getAdminFirestore } from "@/firebase/admin";
+export { getAdminFirestore } from "@/firebase/admin";
