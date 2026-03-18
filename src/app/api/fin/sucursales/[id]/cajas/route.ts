@@ -31,8 +31,9 @@ function mapCaja(
 export const GET = withAuth<{ id: string }>(async (_request, context, authContext) => {
   try {
     const orgId = requireOrganizationId(authContext.organizationId);
+    const { id } = await context.params;
     const db = getAdminFirestore();
-    const sucursalRef = db.doc(FIN_COLLECTIONS.sucursal(orgId, context.params.id));
+    const sucursalRef = db.doc(FIN_COLLECTIONS.sucursal(orgId, id));
     const sucursalSnap = await sucursalRef.get();
 
     if (!sucursalSnap.exists) {
@@ -40,7 +41,7 @@ export const GET = withAuth<{ id: string }>(async (_request, context, authContex
     }
 
     const snapshot = await db
-      .collection(FIN_COLLECTIONS.cajas(orgId, context.params.id))
+      .collection(FIN_COLLECTIONS.cajas(orgId, id))
       .orderBy('nombre', 'asc')
       .get();
 
@@ -60,6 +61,7 @@ export const GET = withAuth<{ id: string }>(async (_request, context, authContex
 export const POST = withAuth<{ id: string }>(async (request, context, authContext) => {
   try {
     const orgId = requireOrganizationId(authContext.organizationId);
+    const { id } = await context.params;
     const body = (await request.json()) as Partial<FinCajaCreateInput>;
     const nombre = body.nombre?.trim();
     const cuentaContableId = body.cuenta_contable_id?.trim();
@@ -72,7 +74,7 @@ export const POST = withAuth<{ id: string }>(async (request, context, authContex
     }
 
     const db = getAdminFirestore();
-    const sucursalRef = db.doc(FIN_COLLECTIONS.sucursal(orgId, context.params.id));
+    const sucursalRef = db.doc(FIN_COLLECTIONS.sucursal(orgId, id));
     const cuentaRef = db.doc(`${FIN_COLLECTIONS.cuentas(orgId)}/${cuentaContableId}`);
     const [sucursalSnap, cuentaSnap] = await Promise.all([
       sucursalRef.get(),
@@ -90,12 +92,12 @@ export const POST = withAuth<{ id: string }>(async (request, context, authContex
       );
     }
 
-    const ref = db.collection(FIN_COLLECTIONS.cajas(orgId, context.params.id)).doc();
+    const ref = db.collection(FIN_COLLECTIONS.cajas(orgId, id)).doc();
     const now = new Date().toISOString();
     const caja: FinCaja = {
       id: ref.id,
       organization_id: orgId,
-      sucursal_id: context.params.id,
+      sucursal_id: id,
       nombre,
       cuenta_contable_id: cuentaContableId,
       estado: 'abierta',

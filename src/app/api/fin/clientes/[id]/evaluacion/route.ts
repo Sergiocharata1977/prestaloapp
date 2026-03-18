@@ -16,10 +16,8 @@ export const GET = withAuth<RouteContext['params']>(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const evaluaciones = await ScoringService.getEvaluaciones(
-        auth.organizationId,
-        context.params.id
-      );
+      const { id } = await context.params;
+      const evaluaciones = await ScoringService.getEvaluaciones(auth.organizationId, id);
 
       return NextResponse.json({ evaluaciones });
     } catch {
@@ -38,6 +36,7 @@ export const POST = withAuth<RouteContext['params']>(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
+      const { id } = await context.params;
       const body = (await request.json().catch(() => null)) as
         | EvaluacionCreateInput
         | null;
@@ -67,19 +66,17 @@ export const POST = withAuth<RouteContext['params']>(
 
       const scores = ScoringService.calcularScore(itemsParaCalculo);
 
-      const id = await ScoringService.crearEvaluacion(
+      const evalId = await ScoringService.crearEvaluacion(
         auth.organizationId,
-        context.params.id,
+        id,
         body,
         auth.user.uid
       );
 
-      const evaluacion = await ScoringService.getEvaluaciones(
-        auth.organizationId,
-        context.params.id
-      ).then((list) => list.find((e) => e.id === id) ?? null);
+      const evaluacion = await ScoringService.getEvaluaciones(auth.organizationId, id)
+        .then((list) => list.find((e) => e.id === evalId) ?? null);
 
-      return NextResponse.json({ id, evaluacion, scores }, { status: 201 });
+      return NextResponse.json({ id: evalId, evaluacion, scores }, { status: 201 });
     } catch {
       return NextResponse.json(
         { error: 'No se pudo crear la evaluación' },

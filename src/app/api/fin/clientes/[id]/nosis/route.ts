@@ -17,10 +17,8 @@ export const POST = withAuth<RouteContext['params']>(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const cliente = await ClienteService.getById(
-        auth.organizationId,
-        context.params.id
-      );
+      const { id } = await context.params;
+      const cliente = await ClienteService.getById(auth.organizationId, id);
 
       if (!cliente) {
         return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 });
@@ -44,11 +42,7 @@ export const POST = withAuth<RouteContext['params']>(
         consultado_por: auth.user.uid,
       };
 
-      await ClienteService.actualizarNosisUltimo(
-        auth.organizationId,
-        context.params.id,
-        resumen
-      );
+      await ClienteService.actualizarNosisUltimo(auth.organizationId, id, resumen);
 
       return NextResponse.json({ resultado });
     } catch {

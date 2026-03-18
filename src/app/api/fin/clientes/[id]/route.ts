@@ -29,10 +29,8 @@ export const GET = withAuth<RouteContext['params']>(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const cliente = await ClienteService.getById(
-        auth.organizationId,
-        context.params.id
-      );
+      const { id } = await context.params;
+      const cliente = await ClienteService.getById(auth.organizationId, id);
 
       if (!cliente) {
         return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 });
@@ -55,6 +53,7 @@ export const PATCH = withAuth<RouteContext['params']>(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
+      const { id } = await context.params;
       const body = (await request.json().catch(() => null)) as
         | Partial<FinClienteCreateInput>
         | null;
@@ -63,11 +62,7 @@ export const PATCH = withAuth<RouteContext['params']>(
         return NextResponse.json({ error: 'Body requerido' }, { status: 400 });
       }
 
-      const cliente = await ClienteService.actualizar(
-        auth.organizationId,
-        context.params.id,
-        body
-      );
+      const cliente = await ClienteService.actualizar(auth.organizationId, id, body);
 
       if (!cliente) {
         return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 });
@@ -97,10 +92,8 @@ export const DELETE = withAuth<RouteContext['params']>(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const deleted = await ClienteService.eliminar(
-        auth.organizationId,
-        context.params.id
-      );
+      const { id } = await context.params;
+      const deleted = await ClienteService.eliminar(auth.organizationId, id);
 
       if (!deleted) {
         return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 });

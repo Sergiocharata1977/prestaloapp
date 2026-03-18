@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export const GET = withAuth(async (_req, ctx, { organizationId }) => {
   const orgId = organizationId!;
-  const clienteId = (ctx.params as { id: string }).id;
+  const { id: clienteId } = await ctx.params;
   const db = getAdminFirestore();
 
   const snap = await db

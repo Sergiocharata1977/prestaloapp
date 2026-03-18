@@ -15,7 +15,8 @@ function requireOrganizationId(organizationId: string | null): string {
 export const GET = withAuth<{ id: string }>(async (_request, context, authContext) => {
   try {
     const orgId = requireOrganizationId(authContext.organizationId);
-    const cobro = await CobroService.getById(orgId, context.params.id);
+    const { id } = await context.params;
+    const cobro = await CobroService.getById(orgId, id);
 
     if (!cobro) {
       return NextResponse.json({ error: 'Cobro no encontrado' }, { status: 404 });

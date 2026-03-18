@@ -22,7 +22,7 @@ export type AuthContext = {
 };
 
 type RouteContext<TParams extends Record<string, string> = Record<string, string>> = {
-  params: TParams;
+  params: Promise<TParams>;
 };
 
 type RouteHandler<

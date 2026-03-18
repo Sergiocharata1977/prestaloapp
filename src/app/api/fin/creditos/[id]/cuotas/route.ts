@@ -28,21 +28,15 @@ export const GET = withAuth<RouteContext['params']>(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const credito = await CreditoService.getById(
-        auth.organizationId,
-        context.params.id
-      );
+      const { id } = await context.params;
+      const credito = await CreditoService.getById(auth.organizationId, id);
 
       if (!credito) {
         return NextResponse.json({ error: 'Credito no encontrado' }, { status: 404 });
       }
 
       const estado = parseEstado(request.nextUrl.searchParams.get('estado'));
-      const cuotas = await CreditoService.getCuotas(
-        auth.organizationId,
-        context.params.id,
-        estado
-      );
+      const cuotas = await CreditoService.getCuotas(auth.organizationId, id, estado);
 
       return NextResponse.json({ cuotas });
     } catch {

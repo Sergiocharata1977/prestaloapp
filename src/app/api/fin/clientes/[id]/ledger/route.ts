@@ -13,10 +13,10 @@ function requireOrganizationId(organizationId: string | null): string {
 }
 
 export const GET = withAuth<{ id: string }>(
-  async (request, context, authContext) => {
+  async (_request, context, authContext) => {
     try {
       const orgId = requireOrganizationId(authContext.organizationId);
-      const clienteId = context.params.id;
+      const { id: clienteId } = await context.params;
 
       const [movimientos, saldo_actual] = await Promise.all([
         LedgerService.getMovimientos(orgId, clienteId),

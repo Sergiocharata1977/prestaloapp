@@ -49,16 +49,14 @@ export const GET = withAuth<RouteContext['params']>(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const credito = await CreditoService.getById(
-        auth.organizationId,
-        context.params.id
-      );
+      const { id } = await context.params;
+      const credito = await CreditoService.getById(auth.organizationId, id);
 
       if (!credito) {
         return NextResponse.json({ error: 'Credito no encontrado' }, { status: 404 });
       }
 
-      const cuotas = await CreditoService.getCuotas(auth.organizationId, context.params.id);
+      const cuotas = await CreditoService.getCuotas(auth.organizationId, id);
 
       return NextResponse.json({ credito: { ...credito, cuotas } });
     } catch {
@@ -77,10 +75,8 @@ export const PATCH = withAuth<RouteContext['params']>(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const credito = await CreditoService.getById(
-        auth.organizationId,
-        context.params.id
-      );
+      const { id } = await context.params;
+      const credito = await CreditoService.getById(auth.organizationId, id);
 
       if (!credito) {
         return NextResponse.json({ error: 'Credito no encontrado' }, { status: 404 });
@@ -94,14 +90,11 @@ export const PATCH = withAuth<RouteContext['params']>(
       const body = creditoEstadoPatchSchema.parse(json);
       await CreditoService.actualizarEstado(
         auth.organizationId,
-        context.params.id,
+        id,
         parseEstado(body.estado_nuevo)
       );
 
-      const actualizado = await CreditoService.getById(
-        auth.organizationId,
-        context.params.id
-      );
+      const actualizado = await CreditoService.getById(auth.organizationId, id);
 
       return NextResponse.json({ credito: actualizado });
     } catch (error) {
