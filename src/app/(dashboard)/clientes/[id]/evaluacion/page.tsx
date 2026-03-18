@@ -8,7 +8,7 @@ import { apiFetch } from "@/lib/apiFetch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SCORING_ITEMS_CATALOG, ScoringService } from "@/services/ScoringService";
+import { SCORING_ITEMS_CATALOG, calcularScore } from "@/lib/scoring/utils";
 import type { EvaluacionTier, ScoringItem } from "@/types/fin-evaluacion";
 
 // ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ export default function EvaluacionPage() {
       return;
     }
 
-    const result = ScoringService.calcularScore(items);
+    const result = calcularScore(items);
     setPreview(result);
   }, [puntajes]);
 
