@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import {
   BadgeDollarSign,
   BriefcaseBusiness,
+  Database,
   ReceiptText,
   Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -31,12 +33,35 @@ type DashboardStats = {
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [seeding, setSeeding] = useState(false);
+  const [seedMsg, setSeedMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  useEffect(() => {
+  const loadStats = () => {
     apiFetch("/api/fin/dashboard")
       .then((r) => r.json())
       .then((d) => setStats(d as DashboardStats));
-  }, []);
+  };
+
+  useEffect(() => { loadStats(); }, []);
+
+  const handleSeedDemo = async () => {
+    setSeeding(true);
+    setSeedMsg(null);
+    try {
+      const res = await apiFetch("/api/fin/seed-demo", { method: "POST" });
+      const body = await res.json() as { ok?: boolean; clientes?: number; creditos?: number; error?: string };
+      if (!res.ok) {
+        setSeedMsg({ ok: false, text: body.error ?? "Error al cargar datos demo" });
+      } else {
+        setSeedMsg({ ok: true, text: `Datos cargados: ${body.clientes ?? 0} clientes, ${body.creditos ?? 0} créditos con cuotas.` });
+        loadStats();
+      }
+    } catch {
+      setSeedMsg({ ok: false, text: "Error de conexión" });
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   const items = [
     {
@@ -68,15 +93,34 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <section className="flex flex-col gap-4 rounded-[2rem] border border-white/70 bg-white/75 p-6 shadow-[0_16px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
-        <Badge className="w-fit">Dashboard operativo</Badge>
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-            Resumen general
-          </h1>
-          <p className="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-            Métricas en tiempo real de clientes, créditos, cobranzas y cartera.
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <Badge className="w-fit">Dashboard operativo</Badge>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+              Resumen general
+            </h1>
+            <p className="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+              Métricas en tiempo real de clientes, créditos, cobranzas y cartera.
+            </p>
+          </div>
+          {stats?.total_clientes === 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSeedDemo}
+              disabled={seeding}
+              className="shrink-0"
+            >
+              <Database className="h-4 w-4" />
+              {seeding ? "Cargando..." : "Cargar datos demo"}
+            </Button>
+          )}
         </div>
+        {seedMsg && (
+          <div className={`rounded-xl border px-4 py-3 text-sm ${seedMsg.ok ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+            {seedMsg.text}
+          </div>
+        )}
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
