@@ -35,19 +35,19 @@ const mainItems = [
   { href: "/operaciones-cheques", label: "Cheques",    icon: ClipboardList },
   { href: "/cobros",              label: "Cobros",     icon: Wallet },
   { href: "/cajas",               label: "Cajas",      icon: BriefcaseBusiness },
-  { href: "/usuarios",            label: "Usuarios",   icon: UserCircle2 },
 ];
 
 const configItems = [
-  { href: "/tipos-cliente",         label: "Tipos cliente", icon: Users },
-  { href: "/politicas-crediticias", label: "Politicas",     icon: Scale },
-  { href: "/planes-financiacion",   label: "Planes",        icon: BookOpenText },
+  { href: "/tipos-cliente",         label: "Tipos cliente",   icon: Users },
+  { href: "/politicas-crediticias", label: "Politicas",       icon: Scale },
+  { href: "/planes-financiacion",   label: "Planes",          icon: BookOpenText },
+  { href: "/usuarios",              label: "Usuarios",        icon: UserCircle2 },
+  { href: "/plan-cuentas",          label: "Plan de Cuentas", icon: BookOpen },
 ];
 
 const bottomItems = [
-  { href: "/reportes",     label: "Reportes",       icon: FileText },
-  { href: "/plan-cuentas", label: "Plan de Cuentas",icon: BookOpenText },
-  { href: "/manual",       label: "Manual",         icon: BookOpen },
+  { href: "/reportes", label: "Reportes", icon: FileText },
+  { href: "/manual",   label: "Manual",   icon: BookOpen },
 ];
 
 const capabilityItems = [
