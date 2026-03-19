@@ -1,11 +1,13 @@
 # PrestaloApp — Sistema de Financiación al Consumo
-> Fecha: 2026-03-16 | Proyecto: prestaloapp | Estado: Olas 0-5 completadas, Vercel desplegado
+> Última actualización: 2026-03-19 | OLA 9 completada | Vercel desplegado
+
+---
 
 ## ¿Qué es?
 
-PrestaloApp es una plataforma SaaS de **gestión de carteras de crédito al consumo**. Está diseñada para entidades financieras, financieras de consumo y prestamistas que necesitan originar préstamos, hacer el seguimiento de cobranzas y llevar la contabilidad automatizada de su cartera.
+PrestaloApp es una plataforma SaaS de **gestión de carteras de crédito al consumo y descuento de cheques**. Está diseñada para entidades financieras, financieras de consumo y prestamistas que necesitan originar préstamos, hacer el seguimiento de cobranzas, gestionar operaciones de cheques y llevar la contabilidad automatizada.
 
-Es un proyecto independiente que comparte el mismo proyecto Firebase con 9001app-firebase (prefijo `fin_` en Firestore) pero corre como aplicación Next.js separada.
+Comparte el mismo proyecto Firebase con 9001app-firebase (prefijo `fin_` en Firestore) pero corre como aplicación Next.js separada.
 
 ---
 
@@ -17,233 +19,194 @@ Es un proyecto independiente que comparte el mismo proyecto Firebase con 9001app
 | Lenguaje | **TypeScript 5 strict** |
 | Backend/DB | **Firebase 12.10 (Firestore) + Admin SDK 13.7** |
 | UI | **Radix UI + Tailwind CSS v4** |
-| Animaciones | **Framer Motion** |
-| Formularios | **React Hook Form + Zod v4** |
-| Notificaciones | **Sonner (toasts)** |
-| Analytics | **PostHog** |
-| Error tracking | **Sentry** |
-| Emails | **Resend** |
-| Tours | **Driver.js** |
-| Tests unitarios | **Jest + React Testing Library** |
-| Tests E2E | **Playwright** |
 | Deploy | **Vercel** |
-| CI | **GitHub Actions** |
+| Repo | **GitHub** |
 
 ---
 
 ## Módulos del Sistema
 
-### 1. Dashboard Principal
-**Ruta:** `/`
+### 1. Dashboard
+**Ruta:** `/dashboard`
 
-Métricas operativas en tiempo real:
-- Total clientes activos
-- Créditos activos
-- Cartera total (capital pendiente)
-- Cobranzas del día (cantidad + monto)
-
-**API:** `GET /api/fin/dashboard`
+Métricas del día: cobros pendientes, créditos vencidos, cartera activa, cajas.
 
 ---
 
 ### 2. Gestión de Clientes
-**Rutas:** `/clientes` / `/clientes/nuevo` / `/clientes/[id]`
+**Rutas:** `/clientes` / `/clientes/[id]`
 
 - Alta de personas físicas y jurídicas (CUIT obligatorio)
 - Búsqueda fuzzy por nombre/CUIT con debounce
-- Detección automática de duplicados
-- Vista de cliente: créditos activos, historial de pagos, **cuenta corriente**
-- Consulta al **buró Nosis** desde el perfil del cliente
+- **Filtro por tipo de cliente** (clasificación interna) con totalizador de cartera
+- **Detalle 360°**: créditos, operaciones de cheques, cuenta corriente, evaluación crediticia, Nosis, legajo
 
 **Colección Firestore:** `fin_clientes`
 
 ---
 
-### 3. Originación de Créditos
-**Rutas:** `/creditos` / `/creditos/nuevo` / `/creditos/[id]`
+### 3. Evaluación Crediticia y Scoring
+**Rutas:** `/clientes/[id]/evaluacion` / `/clientes/[id]/evaluacion/historial`
 
-Dos sistemas de amortización:
-- **Sistema Francés** — cuota fija, interés decreciente (annuité)
-- **Sistema Alemán** — capital fijo, cuota decreciente
+- Modelo de scoring: 14 ítems en 3 categorías (cualitativo 43%, conflictos 31%, cuantitativo 26%)
+- Score final 0-10 → Tiers: A (≥8), B (≥6), C (≥4), Reprobado (<4)
+- Score Nosis opcional (integración externa)
+- Línea de crédito automática: límite mensual y total según tier + política
+- Historial con decisiones (aprobar/rechazar) por analista
 
-Flujo de creación (2 pasos):
-1. Selección de sucursal + cliente
-2. Ingreso de capital / tasa / plazo + **preview de tabla de amortización antes de confirmar**
-
-Al confirmar:
-- Se generan automáticamente todas las **cuotas** (fin_cuotas)
-- Se genera el **asiento contable de otorgamiento** (fin_asientos)
-- Se asigna número de crédito único
-
-**API key:** `GET /api/fin/creditos/preview` — previsualiza tabla sin guardar
-
-**Colección Firestore:** `fin_creditos`
+**Colección Firestore:** `fin_evaluaciones`
 
 ---
 
-### 4. Gestión de Cuotas (Installments)
-Generadas automáticamente al crear el crédito.
+### 4. Originación de Créditos
+**Rutas:** `/creditos` / `/creditos/[id]`
 
-Cada cuota contiene:
-- Número de cuota y fecha de vencimiento
-- Desglose capital + interés
-- Saldo de capital (capital restante)
-- Estado: `pendiente` / `pagada` / `vencida` (calculado por fecha)
+Dos sistemas de amortización: **Francés** (cuota fija) y **Alemán** (capital fijo).
 
-**Colección Firestore:** `fin_cuotas`
+- Tasas por tramos según plan de financiación (ej.: 3 cuotas → 4.5%, 6 → 5.0%)
+- Preview de tabla de amortización antes de confirmar
+- Snapshot de condiciones al momento del otorgamiento (inmutabilidad)
+- **Asiento contable automático** al otorgar (4 líneas balanceadas)
+- Numeración secuencial por año (`2026-000001`)
+- Validación de línea de crédito disponible
+
+**Colección Firestore:** `fin_creditos`, `fin_cuotas`
 
 ---
 
-### 5. Registro de Cobranzas
-**Rutas:** `/cobros` / `/cobros/nuevo`
+### 5. Cobranzas
+**Ruta:** `/cobros`
 
-- Registra el pago de una cuota específica
-- Medio de pago: `efectivo` (extensible a cheque, transferencia)
-- Al registrar:
-  - Marca la cuota como pagada
-  - Actualiza el estado del crédito si corresponde
-  - Genera el **asiento contable de cobro** automáticamente
-- Anulación de pagos con trazabilidad
+- Registra cobro de cuota con caja y medio de pago
+- Calcula mora automática (tasa punitoria del snapshot del crédito)
+- **Asiento contable automático** al cobrar
+- Impresión de recibo desde el cobro
 
 **Colección Firestore:** `fin_cobros`
 
 ---
 
-### 6. Contabilidad — Libro Diario y Mayor
-**Rutas:** `/asientos` / `/asientos/[id]` / `/asientos/mayor`
+### 6. Descuento de Cheques
+**Rutas:** `/operaciones-cheques` / `/operaciones-cheques/[id]`
 
-**Asientos automáticos generados por el sistema:**
+- Carga de uno o más cheques por operación (banco, CUIT librador, fecha vto., valor)
+- Cálculo automático de descuento por días corridos con tasa del plan
+- Preview: nominal, días, descuento, gastos fijos/variables, neto a acreditar
+- **Asiento contable automático** al liquidar
+- Seguimiento Kanban: recibido → en_cartera → depositado → acreditado
+- Estados de problema: rechazado, pre_judicial, judicial
 
-*Al otorgar crédito (4 líneas):*
-- Débito: Créditos por Financiaciones (activo ↑)
-- Débito: Intereses no Devengados (pasivo ↑)
-- Crédito: Ventas Financiadas (ingreso ↑)
-- Crédito: Intereses no Devengados (pasivo diferido ↑)
-
-*Al registrar cobro (4 líneas):*
-- Débito: Caja (activo ↑)
-- Débito: Intereses no Devengados (amortización)
-- Crédito: Créditos (activo ↓)
-- Crédito: Intereses Ganados (ingreso devengado)
-
-**Libro Mayor:** resumen por cuenta con saldo progresivo.
-
-**Colección Firestore:** `fin_asientos`
+**Colección Firestore:** `fin_operaciones_cheques`, `fin_cheques`
 
 ---
 
 ### 7. Plan de Cuentas
-**Rutas:** `/plan-cuentas` / `/plan-cuentas/configurar`
+**Ruta:** `/plan-cuentas`
 
-- Estructura jerárquica: Rubros → Cuentas
+- Árbol jerárquico: Rubros → Cuentas
 - Naturaleza: Activo / Pasivo / Patrimonio / Resultados
-- Configuración del plugin: qué cuenta contable usar para cada tipo de movimiento
-- Permite adaptar el plan de cuentas a cada organización
+- Configuración del plugin: mapeo de cuentas para cada tipo de movimiento
 
 **Colecciones Firestore:** `fin_rubros`, `fin_cuentas`, `fin_config_cuentas`
 
 ---
 
-### 8. Sucursales y Cajas
+### 8. Cajas y Sucursales
 **Ruta:** `/cajas`
 
-- Multi-sucursal: cada organización puede tener múltiples sucursales
-- Cada sucursal tiene una o más cajas registradoras
-- Las cajas tienen cuenta contable asociada y tracking de saldo
-- Los cobros se asignan a una caja específica
+- Multi-sucursal con múltiples cajas por sucursal
+- Apertura con monto inicial, cierre con resumen del día
 
-**Colecciones Firestore:** `fin_sucursales`, `fin_sucursales/{id}/fin_cajas`
+**Colecciones Firestore:** `fin_sucursales`, `fin_cajas`
 
 ---
 
-### 9. Integración Nosis (Buró Crediticio)
-**Servicio:** `NosisService`
+### 9. Configuración
+**Menú desplegable lateral → Configuracion**
 
-- Consulta el buró Nosis/BCRA por CUIT
-- Retorna: score crediticio (300-850), situación BCRA, cheques rechazados, juicios activos
-- Modo sandbox para desarrollo (`NOSIS_SANDBOX=true`)
-- Resultado cacheado en el perfil del cliente
-- Timeout: 15 segundos
+| Sub-módulo | Ruta | Descripción |
+|------------|------|-------------|
+| Tipos de cliente | `/tipos-cliente` | Clasificación interna (Persona A, Empresa B, etc.) |
+| Políticas crediticias | `/politicas-crediticias` | Condiciones por segmento (requiere legajo, evaluación, etc.) |
+| Planes de financiación | `/planes-financiacion` | Tasas por tramos + tasa punitoria + cargos |
 
 ---
 
-## Estructura de Tipos (TypeScript)
+### 10. Contabilidad (solo lectura / automática)
+
+> **Decisión de diseño:** No hay asientos manuales ni páginas de libro diario/mayor en el sistema. Todos los asientos son generados automáticamente por los formularios operativos.
+
+| Operación | Asiento generado |
+|-----------|-----------------|
+| Otorgar crédito | 4 líneas: Créditos / Intereses no devengados / Ventas financiadas |
+| Cobrar cuota | 4 líneas: Caja / Créditos / Intereses ganados / devengamiento |
+| Liquidar operación de cheque | Cheques en cartera / Caja / Ingresos por descuento |
+
+Los asientos están disponibles en Firestore (`fin_asientos`) para auditoría externa.
+
+---
+
+### 11. Reportes
+**Ruta:** `/reportes`
+
+- Cartera activa (créditos vigentes, capital pendiente, próximos vencimientos)
+- Líneas consumidas (% de uso del cupo mensual/total por cliente)
+- Cartera de cheques (estado, banco, fecha vto.)
+- Cheques rechazados (gastos, estado judicial)
+- Cobros del período (capital, interés, mora)
+
+---
+
+### 12. Manual de Sistemas
+**Ruta:** `/manual`
+
+Guía funcional y operativa integrada en el sistema. Expandible por módulo.
+
+---
+
+## Arquitectura de Tipos
+
 `src/types/fin-*.ts`
 
 | Archivo | Entidad |
 |---------|---------|
-| `fin-cliente.ts` | Cliente (física/jurídica), resultado Nosis |
-| `fin-credito.ts` | Crédito, estado, sistema de amortización |
-| `fin-cuota.ts` | Cuota individual, estado de pago |
-| `fin-cobro.ts` | Registro de pago, medio de pago |
-| `fin-asiento.ts` | Asiento contable, líneas debe/haber, origen |
+| `fin-cliente.ts` | Cliente (física/jurídica), Nosis, legajo |
+| `fin-credito.ts` | Crédito, snapshots (política, plan, tipo_cliente) |
+| `fin-cuota.ts` | Cuota, estado calculado |
+| `fin-cobro.ts` | Cobro, medio de pago |
+| `fin-asiento.ts` | Asiento contable, líneas debe/haber |
+| `fin-operacion-cheque.ts` | Operación, resumen, base contable |
+| `fin-cheque.ts` | Cheque individual, eventos de estado |
+| `fin-evaluacion.ts` | Evaluación crediticia, scoring, tiers |
+| `fin-linea-credito.ts` | Línea de crédito, disponible, vigencia |
+| `fin-plan-financiacion.ts` | Plan, tramos de tasa |
+| `fin-politica-crediticia.ts` | Política, tiers por política |
+| `fin-tipo-cliente.ts` | Clasificación interna |
 | `fin-plan-cuentas.ts` | Rubro, cuenta, naturaleza, config plugin |
-| `fin-sucursal.ts` | Sucursal, caja, estado de caja |
+| `fin-sucursal.ts` | Sucursal, caja |
 
 ---
 
 ## Servicios
+
 `src/services/`
 
 | Servicio | Responsabilidad |
 |----------|----------------|
-| `AmortizationService` | Cálculo tabla amortización (Francés/Alemán) |
-| `ClienteService` | CRUD clientes + búsqueda fuzzy |
-| `CreditoService` | Originación + ciclo de vida del crédito |
-| `CobroService` | Registro de pagos + anulación |
-| `JournalEntryService` | Generación automática de asientos contables |
-| `PlanCuentasService` | Gestión del plan de cuentas + configuración |
-| `NosisService` | Consulta al buró crediticio |
-
----
-
-## API Routes (19 endpoints)
-`src/app/api/fin/`
-
-Todos los endpoints están protegidos con `withAuth()` y el scoping de organización.
-
-| Endpoint | Métodos |
-|----------|---------|
-| `/api/fin/dashboard` | GET |
-| `/api/fin/clientes` | GET, POST |
-| `/api/fin/clientes/[id]` | GET, PUT |
-| `/api/fin/clientes/[id]/nosis` | GET |
-| `/api/fin/clientes/[id]/cuenta-corriente` | GET |
-| `/api/fin/creditos` | GET, POST |
-| `/api/fin/creditos/preview` | GET |
-| `/api/fin/creditos/[id]` | GET, PUT |
-| `/api/fin/creditos/[id]/cuotas` | GET |
-| `/api/fin/cobros` | GET, POST |
-| `/api/fin/cobros/[id]` | GET, DELETE |
-| `/api/fin/asientos` | GET, POST |
-| `/api/fin/asientos/[id]` | GET |
-| `/api/fin/asientos/mayor` | GET |
-| `/api/fin/plan-cuentas/rubros` | GET |
-| `/api/fin/plan-cuentas/cuentas` | GET |
-| `/api/fin/plan-cuentas/config` | GET, POST |
-| `/api/fin/sucursales` | GET, POST |
-| `/api/fin/sucursales/[id]/cajas` | GET, POST |
-
----
-
-## Modelo de Multi-Tenancy
-
-Mismo proyecto Firebase que 9001app-firebase:
-- Firebase Auth compartida — mismo login para todas las apps del ecosistema
-- Todas las colecciones con prefijo `fin_` para namespace
-- Cada documento tiene `organization_id` para aislamiento
-- `withAuth()` extrae el org del token Firebase y scope todas las queries
-
----
-
-## Decisiones de Arquitectura Clave
-
-1. **`getAdminFirestore()`** — exportada desde `src/firebase/admin.ts` para acceso server-side
-2. **Zod v4** — `z.number()` + `valueAsNumber: true` en `register()` (no usar `z.coerce.number()`)
-3. **`apiFetch`** — client-side fetch con Bearer token automático (`src/lib/apiFetch.ts`)
-4. **Cuotas generadas al crear el crédito** — no on-demand, están precomputadas
-5. **Asientos contables automáticos** — no requieren intervención manual del contador
-6. **Plan de cuentas configurable** — cada org mapea sus propias cuentas contables
+| `AmortizationService` | Tabla amortización Francés/Alemán |
+| `ClienteService` | CRUD + búsqueda fuzzy + filtro por tipo |
+| `CreditoService` | Originación + ciclo de vida + mora |
+| `CobroService` | Registro de pagos + asiento contable |
+| `JournalEntryService` | Generación de asientos (cobro, cheque) |
+| `OperacionChequeService` | Flujo completo de descuento de cheques |
+| `LineaCreditoService` | Cálculo de cupo disponible |
+| `ScoringService` | Score ponderado 14 ítems + tiers |
+| `NosisService` | Consulta buró externo (sandbox / producción) |
+| `PlanCuentasService` | Plan de cuentas + config plugin |
+| `LegajoService` | Documentos y checklist por cliente |
+| `PlanFinanciacionService` | Tasas, tramos, cargos |
+| `PoliticaCrediticiaService` | Reglas de otorgamiento por segmento |
+| `TipoClienteService` | Clasificación interna de clientes |
 
 ---
 
@@ -255,36 +218,25 @@ FIREBASE_CLIENT_EMAIL          # Admin SDK
 FIREBASE_PRIVATE_KEY           # Admin SDK
 NEXT_PUBLIC_FIREBASE_*         # Client SDK
 NOSIS_API_KEY                  # Buró crediticio
-NOSIS_SANDBOX                  # true = modo sandbox desarrollo
+NOSIS_SANDBOX                  # true = sandbox desarrollo
 ```
 
 ---
 
-## Estado del Proyecto (2026-03-16)
+## Estado del Proyecto
 
 | Ola | Contenido | Estado |
 |-----|-----------|--------|
-| Ola 0 | Setup, Firebase, Auth, shell | ✅ Completada |
-| Ola 1 | Tipos + Servicios base | ✅ Completada |
-| Ola 2 | Clientes CRUD + API | ✅ Completada |
-| Ola 3 | Créditos + Amortización + Cuotas | ✅ Completada |
-| Ola 4 | Cobranzas + Contabilidad | ✅ Completada |
-| Ola 5 | Plan de Cuentas + Sucursales/Cajas + Nosis | ✅ Completada |
-| Build | `tsc 0 errores`, `audit 4/4 OK` | ✅ Verde |
-| Deploy | Vercel | ✅ Desplegado |
+| 0 | Setup, Firebase, Auth | ✅ |
+| 1 | Tipos cliente, políticas, planes con tramos de tasa | ✅ |
+| 2 | Clientes CRUD + scoring configurable + Nosis ampliado | ✅ |
+| 3 | Créditos + amortización + cuotas + snapshots | ✅ |
+| 4 | Cobranzas + asientos automáticos | ✅ |
+| 5 | Plan de cuentas + sucursales/cajas + Nosis | ✅ |
+| 6 | Legajo + líneas de crédito | ✅ |
+| 7 | Cheques: operaciones, Kanban, descuento | ✅ |
+| 8 | Impresión: contratos, recibos, liquidaciones cheques | ✅ |
+| 9 | Sidebar limpio + filtro tipo-cliente + detalle 360° | ✅ |
 
-**Commit de referencia:** `df7f2b5`
-**Reporte maestro:** `reports/51_PLAN_OLAS_PRESTALOAPP_FINANCIACION_CONSUMO.md`
-
----
-
-## Deuda Técnica y Próximos Pasos
-
-| Pendiente | Descripción |
-|-----------|-------------|
-| Medios de pago | Solo efectivo — agregar cheque, transferencia |
-| Nosis producción | Rotar API key real, mejorar manejo de errores |
-| Asientos manuales | UI para crear ajuste manual (solo API por ahora) |
-| Reporting avanzado | P&L, aging de cartera, mora por segmento |
-| Refinanciación | Estado "refinanciado" en modelo pero sin UI/lógica |
-| Audit trail completo | Log de anulaciones y correcciones |
+**Último commit:** `1bb8e0a`
+**Reporte de OLAs:** `reports/55_PLAN_GESTION_CREDITOS_PERSONAS_EMPRESAS_CHEQUES_2026-03-18.md`

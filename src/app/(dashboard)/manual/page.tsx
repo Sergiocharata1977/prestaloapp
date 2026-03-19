@@ -11,6 +11,7 @@ import {
   Scale,
   Settings,
   ShieldCheck,
+  ClipboardList,
   Users,
   Wallet,
 } from "lucide-react";
@@ -60,33 +61,43 @@ const SECTIONS: Section[] = [
     badgeColor: "bg-green-100 text-green-800",
     subsections: [
       {
-        title: "Alta de clientes",
+        title: "Lista de clientes",
         content: [
-          "Hacer clic en '+ Nuevo cliente' en la pantalla de Clientes.",
-          "Completar: tipo de cliente (persona física o jurídica), nombre, CUIT, DNI, teléfono, email y domicilio.",
-          "El sistema asigna automáticamente el tipo de clasificación interno si se configuró un tipo de cliente.",
-          "Una vez guardado, el cliente aparece en el listado con vista de tarjeta o tabla.",
+          "La pantalla muestra todos los clientes con: nombre, CUIT, tipo (física/jurídica), clasificación interna, créditos activos y saldo adeudado.",
+          "Filtro por tipo de cliente: seleccionar del dropdown para ver solo un segmento. El header muestra cuántos clientes y el total de cartera del filtro.",
+          "Búsqueda por nombre o CUIT con debounce de 300ms.",
+          "Vista lista (tabla) o tarjetas — alternar con los botones de la esquina derecha.",
         ],
       },
       {
-        title: "Ficha del cliente",
+        title: "Alta de clientes",
         content: [
-          "Muestra datos personales, créditos activos, cuenta corriente, evaluación crediticia vigente y datos Nosis.",
-          "Tab Resumen: evaluación vigente con score final, score Nosis, tier sugerido y asignado, límites.",
-          "Tab Legajo: checklist de documentos por tipo de cliente (DNI, ingresos, etc.). Marcar como completo cada ítem.",
-          "Botón 'Nueva evaluación': abre el formulario de scoring con los 14 ítems del modelo.",
-          "Botón 'Consultar Nosis': dispara la consulta al servicio externo y guarda el historial.",
+          "Hacer clic en '+ Nuevo cliente'.",
+          "Completar: tipo (persona física o jurídica), nombre, CUIT, DNI, teléfono, email y domicilio.",
+          "Opcionalmente asignar un tipo de cliente (clasificación interna).",
+          "El sistema detecta duplicados por CUIT.",
+        ],
+      },
+      {
+        title: "Detalle del cliente — 360°",
+        content: [
+          "Tab Resumen: evaluación vigente, score, tier asignado, límites de crédito, datos Nosis.",
+          "Tab Legajo: checklist de documentos requeridos por tipo de cliente.",
+          "Sección Créditos: todos los créditos del cliente con estado y cuotas pagas/total.",
+          "Sección Operaciones de cheques: operaciones de descuento vinculadas al cliente (aparece solo si tiene).",
+          "Sección Cuenta corriente: historial de cobros con capital, interés y total cobrado.",
+          "Botón 'Nueva evaluación': abre el formulario de scoring.",
+          "Botón 'Consultar Nosis': dispara consulta al servicio externo.",
         ],
       },
       {
         title: "Evaluación crediticia",
         content: [
-          "Se accede desde la ficha del cliente o desde el menú lateral.",
-          "14 ítems agrupados en 3 categorías: Cualitativos (43%), Conflictos (31%), Cuantitativos (26%).",
-          "Puntuar cada ítem del 1 al 10. El score final se calcula en vivo.",
-          "Score Nosis es opcional; se puede ingresar manualmente si se consultó por fuera.",
-          "Al guardar, la evaluación queda marcada como vigente. Las anteriores pasan a historial.",
-          "El analista puede luego Aprobar (asignar tier y límite) o Rechazar la evaluación.",
+          "14 ítems en 3 categorías: Cualitativos (43%), Conflictos (31%), Cuantitativos (26%).",
+          "Puntuar del 1 al 10 cada ítem. El score final se calcula en vivo.",
+          "Score Nosis opcional — se puede ingresar manualmente.",
+          "Al guardar queda como evaluación vigente. Las anteriores pasan a historial.",
+          "El analista puede Aprobar (asignar tier y límite) o Rechazar.",
         ],
       },
     ],
@@ -103,27 +114,27 @@ const SECTIONS: Section[] = [
         content: [
           "Ir a Créditos → '+ Nuevo crédito' o desde la ficha del cliente.",
           "Seleccionar cliente, política crediticia y plan de financiación.",
-          "Ingresar capital, cantidad de cuotas y sistema de amortización (Francés o Alemán).",
-          "El sistema resuelve la tasa mensual automáticamente según los tramos del plan seleccionado.",
-          "El panel derecho muestra la tabla de amortización en tiempo real antes de confirmar.",
-          "Al confirmar: se crea el crédito, se generan las cuotas y se registra el asiento contable.",
+          "Ingresar capital, cuotas y sistema (Francés o Alemán).",
+          "La tasa mensual se resuelve automáticamente según los tramos del plan.",
+          "El panel derecho muestra la tabla de amortización en tiempo real.",
+          "Al confirmar: se crea el crédito, se generan las cuotas y se registra el asiento contable automáticamente.",
         ],
       },
       {
         title: "Cuotas y cobros",
         content: [
           "Cada crédito genera cuotas con fecha de vencimiento, capital, interés y total.",
-          "Para cobrar una cuota: ir al crédito → seleccionar cuota → 'Registrar cobro'.",
-          "Seleccionar caja, sucursal y medio de pago. El sistema registra el cobro y actualiza el saldo.",
-          "Las cuotas vencidas calculan mora automáticamente usando la tasa punitoria del snapshot del crédito.",
-          "El recibo de cobro se puede imprimir desde el botón 'Imprimir recibo' en cada cobro.",
+          "Para cobrar: ir al crédito → seleccionar cuota → 'Registrar cobro'.",
+          "Seleccionar caja, sucursal y medio de pago.",
+          "Las cuotas vencidas calculan mora usando la tasa punitoria del snapshot del crédito.",
+          "El recibo de cobro se puede imprimir desde el cobro.",
         ],
       },
       {
         title: "Trazabilidad",
         content: [
-          "Cada crédito guarda un snapshot de las condiciones al momento del otorgamiento: política, plan, tasa mensual, tasa punitoria, cargos.",
-          "Esto garantiza que cambios futuros en la configuración no afecten créditos existentes.",
+          "Cada crédito guarda un snapshot de las condiciones del momento: política, plan, tasa mensual, tasa punitoria, cargos.",
+          "Cambios futuros en la configuración no afectan créditos existentes.",
           "El detalle del crédito muestra el contrato imprimible con tabla de amortización completa.",
         ],
       },
@@ -131,29 +142,29 @@ const SECTIONS: Section[] = [
   },
   {
     id: "cheques",
-    icon: <FileText className="h-5 w-5" />,
+    icon: <ClipboardList className="h-5 w-5" />,
     title: "Descuento de cheques",
     badge: "Operativo",
     badgeColor: "bg-blue-100 text-blue-800",
     subsections: [
       {
-        title: "Nueva operación de cheque",
+        title: "Nueva operación",
         content: [
           "Ir a Cheques → 'Nueva operación'.",
           "Seleccionar cliente y cargar uno o más cheques: banco, número, CUIT librador, fecha de vencimiento, valor nominal.",
-          "El sistema calcula el descuento por días corridos usando la tasa del plan asociado a la política del cliente.",
-          "La pantalla de preview muestra: nominal, días, descuento, gastos fijos, gastos variables y neto a acreditar.",
-          "Al confirmar se liquida la operación, se registra el asiento contable y los cheques quedan en estado 'en_cartera'.",
+          "El sistema calcula el descuento por días corridos usando la tasa del plan.",
+          "Preview: nominal, días, descuento, gastos fijos, gastos variables y neto a acreditar.",
+          "Al confirmar: se liquida la operación y se registra el asiento contable automáticamente.",
         ],
       },
       {
         title: "Seguimiento — Kanban",
         content: [
-          "La vista Kanban agrupa los cheques por estado: recibido → en_cartera → depositado → acreditado.",
+          "Estados progresivos: recibido → en_cartera → depositado → acreditado.",
           "Estados de problema: rechazado, pre_judicial, judicial.",
-          "Hacer clic en un cheque para ver el detalle y cambiar el estado.",
-          "El rechazo de cheque permite registrar gastos adicionales.",
-          "La liquidación de la operación se puede imprimir desde el detalle.",
+          "Hacer clic en un cheque para ver detalle y cambiar estado.",
+          "El rechazo permite registrar gastos adicionales.",
+          "La liquidación se puede imprimir desde el detalle.",
         ],
       },
     ],
@@ -168,28 +179,25 @@ const SECTIONS: Section[] = [
       {
         title: "Modelo de scoring",
         content: [
-          "El sistema combina score propio (14 ítems) y score externo Nosis.",
-          "Los 14 ítems se agrupan en 3 categorías con pesos configurables: cualitativos, conflictos, cuantitativos.",
-          "El resultado es un score de 0 a 10 que determina el tier: A (≥8), B (≥6), C (≥4), Reprobado (<4).",
-          "El analista puede overridear el tier sugerido asignando un tier diferente al aprobar la evaluación.",
+          "14 ítems en 3 categorías con pesos configurables.",
+          "Score final 0-10 determina el tier: A (≥8), B (≥6), C (≥4), Reprobado (<4).",
+          "El analista puede overridear el tier sugerido al aprobar.",
         ],
       },
       {
         title: "Nosis",
         content: [
-          "Desde la ficha del cliente → 'Consultar Nosis' para disparar la consulta al servicio externo.",
-          "Se guarda historial con: score, situación BCRA, cheques rechazados, juicios activos, fecha y estado.",
+          "Ficha del cliente → 'Consultar Nosis': dispara consulta al servicio externo.",
+          "Se guarda historial: score, situación BCRA, cheques rechazados, juicios activos, fecha.",
           "El score Nosis puede incluirse en la evaluación crediticia.",
-          "La frecuencia de vigencia de la evaluación se configura en Configuración → Scoring (meses).",
         ],
       },
       {
         title: "Líneas de crédito",
         content: [
-          "Cada cliente con evaluación aprobada puede tener una línea de crédito con límite mensual y total.",
-          "El sistema valida automáticamente que un nuevo crédito no supere los límites disponibles.",
-          "La ficha del cliente muestra: tier vigente, límite mensual/total, consumido y disponible.",
-          "El recálculo de cupo se puede disparar manualmente desde la ficha del cliente.",
+          "Cada cliente con evaluación aprobada tiene límite mensual y total.",
+          "El sistema valida que un nuevo crédito no supere los límites disponibles.",
+          "La ficha del cliente muestra: tier vigente, límite, consumido y disponible.",
         ],
       },
     ],
@@ -204,35 +212,26 @@ const SECTIONS: Section[] = [
       {
         title: "Tipos de cliente",
         content: [
-          "Definen la clasificación interna: ej. Persona A, Persona B, Empresa A, Empresa B.",
-          "Cada tipo tiene: nombre, descripción, habilitado para personas físicas / jurídicas.",
-          "Los tipos de cliente determinan qué política y plan aplica por defecto.",
+          "Clasificación interna: ej. Persona A, Persona B, Empresa A, Empresa B.",
+          "Cada tipo tiene: nombre, descripción, tipo base (persona/empresa).",
+          "En la lista de clientes se puede filtrar por tipo para ver segmentos.",
         ],
       },
       {
         title: "Políticas crediticias",
         content: [
-          "Una política agrupa las condiciones para un segmento de clientes.",
-          "Define: qué tipos de cliente aplican, si se requiere legajo completo, si se requiere evaluación vigente, si acepta cheques propios / de terceros.",
+          "Una política agrupa las condiciones para un segmento.",
+          "Define: qué tipos de cliente aplican, si requiere legajo y/o evaluación vigente, si acepta cheques propios/terceros.",
           "Múltiples planes de financiación pueden estar asociados a una política.",
         ],
       },
       {
         title: "Planes de financiación",
         content: [
-          "Un plan define las tasas que aplican según cantidad de cuotas.",
-          "Ejemplo: 3 cuotas → 4.5% mensual, 6 cuotas → 5.0%, 12 cuotas → 5.8%.",
-          "Además incluye: tasa punitoria mensual, cargo fijo y cargo variable porcentual.",
-          "Al crear un crédito se selecciona el plan; la tasa se resuelve automáticamente según las cuotas elegidas.",
-          "El plan editor tiene una grilla de tramos: filas con 'Cuotas' y 'Tasa mensual %'.",
-        ],
-      },
-      {
-        title: "Configuración de scoring",
-        content: [
-          "Se accede via API /api/fin/config/scoring.",
-          "Permite ajustar los pesos de cada categoría (cualitativo / conflictos / cuantitativo).",
-          "También define los umbrales de cada tier y la frecuencia de vigencia en meses.",
+          "Define las tasas según cantidad de cuotas (tramos). Ej: 3 cuotas → 4.5%, 6 → 5.0%, 12 → 5.8%.",
+          "Incluye: tasa punitoria mensual (para calcular mora), cargo fijo y cargo variable %.",
+          "El plan editor tiene una grilla de tramos con columnas Cuotas / Tasa mensual %.",
+          "Al crear un crédito, la tasa se resuelve automáticamente según las cuotas elegidas.",
         ],
       },
     ],
@@ -245,19 +244,27 @@ const SECTIONS: Section[] = [
     badgeColor: "bg-slate-100 text-slate-800",
     subsections: [
       {
-        title: "Plan de cuentas",
+        title: "Principio de diseño",
         content: [
-          "Árbol contable configurable por organización.",
-          "Soporta activo, pasivo, patrimonio, ingresos y egresos.",
-          "Las cuentas se usan en los asientos automáticos que genera el sistema al otorgar créditos y liquidar cheques.",
+          "Todos los asientos son generados automáticamente por los formularios operativos.",
+          "No hay ingreso manual de asientos ni páginas de Libro Diario/Mayor en el sistema.",
+          "Los registros contables quedan en la base de datos para auditoría externa.",
         ],
       },
       {
-        title: "Libro diario y mayor",
+        title: "¿Qué genera un asiento?",
         content: [
-          "Cada operación (cobro, otorgamiento, liquidación de cheque) genera un asiento automático.",
-          "El libro diario muestra todos los asientos ordenados por fecha.",
-          "El mayor agrupa movimientos por cuenta contable.",
+          "Otorgar crédito → asiento de 4 líneas: Créditos / Intereses no devengados / Ventas financiadas.",
+          "Cobrar cuota → asiento de 4 líneas: Caja / Créditos / Intereses ganados / devengamiento.",
+          "Liquidar operación de cheque → asiento: Cheques en cartera / Caja / Ingresos por descuento.",
+        ],
+      },
+      {
+        title: "Plan de cuentas",
+        content: [
+          "Árbol configurable: Rubros → Cuentas.",
+          "Naturaleza: activo, pasivo, patrimonio, ingresos, egresos.",
+          "La configuración del plugin mapea qué cuenta usar para cada tipo de movimiento.",
         ],
       },
       {
@@ -265,7 +272,6 @@ const SECTIONS: Section[] = [
         content: [
           "Cada cobro se asocia a una caja y sucursal.",
           "La caja registra apertura con monto inicial y se cierra con el resumen del día.",
-          "El reporte de caja muestra: cobros, liquidaciones y saldo final.",
         ],
       },
     ],
@@ -281,10 +287,10 @@ const SECTIONS: Section[] = [
         title: "Reportes disponibles",
         content: [
           "Cartera activa: créditos vigentes con capital pendiente y próximas cuotas a vencer.",
-          "Líneas consumidas: porcentaje de uso del cupo mensual y total por cliente.",
+          "Líneas consumidas: % de uso del cupo mensual/total por cliente.",
           "Cartera de cheques: cheques en cartera por estado, banco y fecha de vencimiento.",
           "Cheques rechazados: detalle de rechazos con gastos y estado judicial.",
-          "Cobros del período: cobros registrados con detalle de capital, interés y mora.",
+          "Cobros del período: cobros registrados con capital, interés y mora.",
         ],
       },
     ],
@@ -299,9 +305,9 @@ const SECTIONS: Section[] = [
       {
         title: "Documentos imprimibles",
         content: [
-          "Contrato de crédito: desde la ficha del crédito → 'Imprimir contrato'. Incluye tabla de amortización completa, datos del cliente, condiciones aplicadas y espacio para firmas.",
-          "Recibo de cobro: desde el listado de cobros de un crédito → 'Imprimir recibo'. Incluye datos del cuota pagada, caja, fecha y firma del cobrador.",
-          "Liquidación de cheque: desde el detalle de la operación → 'Imprimir liquidación'. Incluye detalle de cheques, cálculo del descuento y condiciones aplicadas.",
+          "Contrato de crédito: ficha del crédito → 'Imprimir contrato'. Tabla de amortización completa + datos del cliente + espacio para firmas.",
+          "Recibo de cobro: listado de cobros → 'Imprimir recibo'. Cuota pagada, caja, fecha y firma del cobrador.",
+          "Liquidación de cheque: detalle de la operación → 'Imprimir liquidación'. Detalle de cheques + cálculo del descuento.",
         ],
       },
       {
@@ -309,7 +315,32 @@ const SECTIONS: Section[] = [
         content: [
           "Al hacer clic en el botón de impresión, se abre una nueva pestaña con el documento.",
           "Usar Ctrl+P (o Cmd+P en Mac) para imprimir o guardar como PDF.",
-          "El documento oculta automáticamente los elementos de navegación al imprimir.",
+          "El documento oculta los elementos de navegación al imprimir.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "datos",
+    icon: <FileText className="h-5 w-5" />,
+    title: "Datos del sistema",
+    badge: "Referencia",
+    badgeColor: "bg-gray-100 text-gray-800",
+    subsections: [
+      {
+        title: "Versión actual",
+        content: [
+          "OLA 9 — Sidebar limpio, filtro por tipo de cliente, detalle 360° del cliente.",
+          "Contabilidad: 100% automática. Sin asientos manuales.",
+          "Todos los formularios que mueven dinero generan asiento balanceado al confirmar.",
+        ],
+      },
+      {
+        title: "Acceso y roles",
+        content: [
+          "El sistema es multi-tenant: cada organización tiene sus propios datos aislados.",
+          "El login es compartido con el ecosistema 9001app.",
+          "Las terminales remotas usan autenticación JWT independiente.",
         ],
       },
     ],
@@ -404,7 +435,7 @@ export default function ManualSistemasPage() {
       </div>
 
       <p className="text-center text-xs text-slate-400">
-        PrestaloApp — Plataforma financiera multi-tenant · Versión 1.0
+        PrestaloApp — Plataforma financiera multi-tenant · OLA 9
       </p>
     </div>
   );
