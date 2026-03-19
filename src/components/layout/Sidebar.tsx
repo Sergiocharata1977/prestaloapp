@@ -12,6 +12,7 @@ import {
   ClipboardList,
   CreditCard,
   FileText,
+  Layers,
   LayoutDashboard,
   MonitorSmartphone,
   Scale,
@@ -29,18 +30,21 @@ import { cn } from "@/lib/utils";
 // ---------------------------------------------------------------------------
 
 const mainItems = [
-  { href: "/dashboard",           label: "Dashboard",  icon: LayoutDashboard },
-  { href: "/clientes",            label: "Clientes",   icon: Users },
-  { href: "/creditos",            label: "Creditos",   icon: CreditCard },
-  { href: "/operaciones-cheques", label: "Cheques",    icon: ClipboardList },
-  { href: "/cobros",              label: "Cobros",     icon: Wallet },
-  { href: "/cajas",               label: "Cajas",      icon: BriefcaseBusiness },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/clientes",  label: "Clientes",  icon: Users },
+  { href: "/cobros",    label: "Cobros",    icon: Wallet },
+];
+
+const operacionesItems = [
+  { href: "/creditos",            label: "Prestamos", icon: CreditCard },
+  { href: "/operaciones-cheques", label: "Cheques",   icon: ClipboardList },
 ];
 
 const configItems = [
   { href: "/tipos-cliente",         label: "Tipos cliente",   icon: Users },
   { href: "/politicas-crediticias", label: "Politicas",       icon: Scale },
   { href: "/planes-financiacion",   label: "Planes",          icon: BookOpenText },
+  { href: "/cajas",                 label: "Cajas",           icon: BriefcaseBusiness },
   { href: "/usuarios",              label: "Usuarios",        icon: UserCircle2 },
   { href: "/plan-cuentas",          label: "Plan de Cuentas", icon: BookOpen },
 ];
@@ -90,6 +94,56 @@ function NavLink({
   );
 }
 
+function CollapsibleSection({
+  label,
+  icon: Icon,
+  items,
+  pathname,
+}: {
+  label: string;
+  icon: React.ElementType;
+  items: { href: string; label: string; icon: React.ElementType }[];
+  pathname: string;
+}) {
+  const isActive = items.some(
+    (item) => pathname === item.href || pathname.startsWith(item.href)
+  );
+  const [open, setOpen] = useState(isActive);
+
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition-colors",
+          isActive
+            ? "bg-white/10 text-white"
+            : "text-slate-400 hover:bg-white/8 hover:text-white"
+        )}
+      >
+        <span className="flex items-center gap-3">
+          <Icon className="h-4 w-4" />
+          {label}
+        </span>
+        {open ? (
+          <ChevronDown className="h-4 w-4 opacity-60" />
+        ) : (
+          <ChevronRight className="h-4 w-4 opacity-60" />
+        )}
+      </button>
+
+      {open && (
+        <div className="ml-3 mt-1 grid gap-1 border-l border-white/10 pl-3">
+          {items.map(({ href, icon, label: itemLabel }) => (
+            <NavLink key={href} href={href} icon={icon} label={itemLabel} pathname={pathname} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Sidebar
 // ---------------------------------------------------------------------------
@@ -101,11 +155,6 @@ export function Sidebar() {
   const visibleCapabilityItems = capabilityItems.filter((item) =>
     capabilities.includes(item.capability)
   );
-
-  const configActive = configItems.some(
-    (item) => pathname === item.href || pathname.startsWith(item.href)
-  );
-  const [configOpen, setConfigOpen] = useState(configActive);
 
   return (
     <aside className="w-full border-b border-white/70 bg-slate-950 text-white lg:fixed lg:inset-y-0 lg:left-0 lg:w-72 lg:border-b-0 lg:border-r lg:border-white/10">
@@ -130,43 +179,31 @@ export function Sidebar() {
           ))}
         </nav>
 
+        {/* Operaciones — desplegable */}
+        <div className="mt-5">
+          <CollapsibleSection
+            label="Operaciones"
+            icon={Layers}
+            items={operacionesItems}
+            pathname={pathname}
+          />
+        </div>
+
         {/* Bottom nav */}
-        <nav className="mt-6 grid gap-1">
+        <nav className="mt-5 grid gap-1">
           {bottomItems.map(({ href, icon, label }) => (
             <NavLink key={href} href={href} icon={icon} label={label} pathname={pathname} />
           ))}
         </nav>
 
-        {/* Configuración — desplegable — al fondo */}
-        <div className="mt-6">
-          <button
-            type="button"
-            onClick={() => setConfigOpen((v) => !v)}
-            className={cn(
-              "flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition-colors",
-              configActive
-                ? "bg-white/10 text-white"
-                : "text-slate-400 hover:bg-white/8 hover:text-white"
-            )}
-          >
-            <span className="flex items-center gap-3">
-              <Settings className="h-4 w-4" />
-              Configuracion
-            </span>
-            {configOpen ? (
-              <ChevronDown className="h-4 w-4 opacity-60" />
-            ) : (
-              <ChevronRight className="h-4 w-4 opacity-60" />
-            )}
-          </button>
-
-          {configOpen && (
-            <div className="ml-3 mt-1 grid gap-1 border-l border-white/10 pl-3">
-              {configItems.map(({ href, icon, label }) => (
-                <NavLink key={href} href={href} icon={icon} label={label} pathname={pathname} />
-              ))}
-            </div>
-          )}
+        {/* Configuracion — desplegable */}
+        <div className="mt-5">
+          <CollapsibleSection
+            label="Configuracion"
+            icon={Settings}
+            items={configItems}
+            pathname={pathname}
+          />
         </div>
 
         {/* IT / Gobierno */}
