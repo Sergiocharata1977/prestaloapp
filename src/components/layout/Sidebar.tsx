@@ -16,7 +16,6 @@ import {
   MonitorSmartphone,
   Scale,
   Settings,
-  TableProperties,
   Users,
   Wallet,
 } from "lucide-react";
@@ -44,11 +43,9 @@ const configItems = [
 ];
 
 const bottomItems = [
-  { href: "/reportes",      label: "Reportes",       icon: FileText },
-  { href: "/plan-cuentas",  label: "Plan de Cuentas",icon: BookOpenText },
-  { href: "/asientos",      label: "Libro Diario",   icon: Scale },
-  { href: "/asientos/mayor",label: "Mayor",          icon: TableProperties },
-  { href: "/manual",        label: "Manual",         icon: BookOpen },
+  { href: "/reportes",     label: "Reportes",       icon: FileText },
+  { href: "/plan-cuentas", label: "Plan de Cuentas",icon: BookOpenText },
+  { href: "/manual",       label: "Manual",         icon: BookOpen },
 ];
 
 const capabilityItems = [

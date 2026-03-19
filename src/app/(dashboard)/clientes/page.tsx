@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, LayoutGrid, List, CreditCard } from "lucide-react";
+import { Plus, Search, LayoutGrid, List, CreditCard, Filter } from "lucide-react";
 import type { FinCliente } from "@/types/fin-cliente";
+import type { FinTipoCliente } from "@/types/fin-tipo-cliente";
 import { apiFetch } from "@/lib/apiFetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,15 @@ const columns: Column<FinCliente>[] = [
     ),
   },
   {
+    key: "tipo_cliente_id",
+    header: "Clasificación",
+    render: (r) => r.tipo_cliente_nombre ? (
+      <span className="text-xs text-slate-600">{r.tipo_cliente_nombre}</span>
+    ) : (
+      <span className="text-xs text-slate-400">—</span>
+    ),
+  },
+  {
     key: "creditos_activos_count",
     header: "Créditos activos",
     render: (r) => String(r.creditos_activos_count),
@@ -53,17 +63,30 @@ type ViewMode = "lista" | "tarjetas";
 export default function ClientesPage() {
   const router = useRouter();
   const [clientes, setClientes] = useState<FinCliente[]>([]);
+  const [tipos, setTipos] = useState<FinTipoCliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [tipoClienteId, setTipoClienteId] = useState("");
   const [view, setView] = useState<ViewMode>("lista");
   const [dialogOpen, setDialogOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchClientes = (query: string) => {
+  // Cargar tipos de cliente para el filtro
+  useEffect(() => {
+    apiFetch("/api/fin/tipos-cliente")
+      .then((res) => res.ok ? res.json() : { tipos: [] })
+      .then((data) => setTipos(data.tipos ?? []))
+      .catch(() => {});
+  }, []);
+
+  const fetchClientes = (query: string, tipoId: string) => {
     setLoading(true);
     setError(null);
-    const url = query ? `/api/fin/clientes?q=${encodeURIComponent(query)}` : "/api/fin/clientes";
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (tipoId) params.set("tipoClienteId", tipoId);
+    const url = `/api/fin/clientes${params.toString() ? `?${params}` : ""}`;
     apiFetch(url)
       .then((res) => {
         if (!res.ok) throw new Error("Error al cargar clientes");
@@ -74,13 +97,21 @@ export default function ClientesPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchClientes(""); }, []);
+  useEffect(() => { fetchClientes("", ""); }, []);
 
   const handleSearch = (value: string) => {
     setQ(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchClientes(value), 300);
+    debounceRef.current = setTimeout(() => fetchClientes(value, tipoClienteId), 300);
   };
+
+  const handleTipoChange = (value: string) => {
+    setTipoClienteId(value);
+    fetchClientes(q, value);
+  };
+
+  // Totalizar saldo para mostrar en el header del filtro
+  const totalSaldo = clientes.reduce((acc, c) => acc + (c.saldo_total_adeudado ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -88,7 +119,12 @@ export default function ClientesPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-semibold text-slate-900">Clientes</h2>
-          <p className="text-sm text-slate-500">Gestión de clientes del sistema</p>
+          <p className="text-sm text-slate-500">
+            {clientes.length} cliente{clientes.length !== 1 ? "s" : ""}
+            {tipoClienteId || q ? " (filtrado)" : ""}
+            {" · "}
+            <span className="font-medium text-amber-700">{ars(totalSaldo)}</span> en cartera
+          </p>
         </div>
         <Button onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" />
@@ -97,8 +133,8 @@ export default function ClientesPage() {
       </div>
 
       {/* Filters + view toggle */}
-      <div className="flex items-center gap-3">
-        <div className="relative max-w-sm flex-1">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-xs flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             className="pl-9"
@@ -107,6 +143,22 @@ export default function ClientesPage() {
             onChange={(e) => handleSearch(e.target.value)}
           />
         </div>
+
+        {/* Filtro tipo cliente */}
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-slate-400" />
+          <select
+            value={tipoClienteId}
+            onChange={(e) => handleTipoChange(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+          >
+            <option value="">Todos los tipos</option>
+            {tipos.map((t) => (
+              <option key={t.id} value={t.id}>{t.nombre}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex rounded-lg border border-slate-200 bg-white p-1 gap-1">
           <button
             onClick={() => setView("lista")}
@@ -167,9 +219,14 @@ export default function ClientesPage() {
                     </p>
                     <p className="mt-0.5 font-mono text-xs text-slate-400">{c.cuit}</p>
                   </div>
-                  <Badge variant="outline" className="shrink-0 text-xs">
-                    {c.tipo === "fisica" ? "Física" : "Jurídica"}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge variant="outline" className="shrink-0 text-xs">
+                      {c.tipo === "fisica" ? "Física" : "Jurídica"}
+                    </Badge>
+                    {c.tipo_cliente_nombre && (
+                      <span className="text-xs text-slate-400">{c.tipo_cliente_nombre}</span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-4 flex items-center gap-1 text-xs text-slate-500">
@@ -195,7 +252,7 @@ export default function ClientesPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onSuccess={(id) => {
-          fetchClientes(q);
+          fetchClientes(q, tipoClienteId);
           router.push(`/clientes/${id}`);
         }}
       />

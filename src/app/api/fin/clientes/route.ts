@@ -23,9 +23,10 @@ export const GET = withAuth(async (request: NextRequest, _context, auth) => {
     }
 
     const query = request.nextUrl.searchParams.get('q')?.trim();
+    const tipoClienteId = request.nextUrl.searchParams.get('tipoClienteId')?.trim() || undefined;
     const clientes = query
       ? await ClienteService.buscar(auth.organizationId, query)
-      : await ClienteService.list(auth.organizationId, 50);
+      : await ClienteService.list(auth.organizationId, 50, { tipoClienteId });
 
     return NextResponse.json({ clientes });
   } catch {

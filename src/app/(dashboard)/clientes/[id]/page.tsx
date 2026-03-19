@@ -19,6 +19,7 @@ import type {
 import type { FinCredito } from "@/types/fin-credito";
 import type { FinCobro } from "@/types/fin-cobro";
 import type { EvaluacionTier, FinEvaluacion } from "@/types/fin-evaluacion";
+import type { FinOperacionCheque } from "@/types/fin-operacion-cheque";
 import { apiFetch } from "@/lib/apiFetch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,6 +94,41 @@ const creditoColumns: Column<FinCredito>[] = [
   { key: "fecha_otorgamiento", header: "Fecha" },
 ];
 
+const chequeColumns: Column<FinOperacionCheque>[] = [
+  {
+    key: "numero_operacion",
+    header: "Operación",
+    render: (r) => r.numero_operacion ?? r.id.slice(0, 8),
+  },
+  {
+    key: "fecha_operacion",
+    header: "Fecha",
+    render: (r) => r.fecha_operacion.slice(0, 10),
+  },
+  {
+    key: "resumen",
+    header: "Cheques",
+    render: (r) => String(r.resumen?.cantidad_cheques ?? "—"),
+  },
+  {
+    key: "importe_bruto",
+    header: "Bruto",
+    render: (r) => ars(r.resumen?.importe_bruto ?? r.importe_bruto ?? 0),
+    className: "text-right font-mono",
+  },
+  {
+    key: "importe_neto_liquidado",
+    header: "Neto liquidado",
+    render: (r) => ars(r.importe_neto_liquidado ?? r.resumen?.importe_neto ?? 0),
+    className: "text-right font-mono font-semibold",
+  },
+  {
+    key: "estado",
+    header: "Estado",
+    render: (r) => <Badge variant="outline">{r.estado}</Badge>,
+  },
+];
+
 const cobroColumns: Column<FinCobro>[] = [
   { key: "fecha_cobro", header: "Fecha", render: (r) => r.fecha_cobro.slice(0, 10) },
   {
@@ -139,6 +175,7 @@ export default function ClienteDetailPage() {
 
   const [cliente, setCliente] = useState<FinCliente | null>(null);
   const [creditos, setCreditos] = useState<FinCredito[]>([]);
+  const [operacionesCheques, setOperacionesCheques] = useState<FinOperacionCheque[]>([]);
   const [cuentaCorriente, setCuentaCorriente] = useState<CuentaCorrienteData | null>(null);
   const [evaluaciones, setEvaluaciones] = useState<FinEvaluacion[]>([]);
   const [nosisConsultas, setNosisConsultas] = useState<FinClienteNosisConsulta[]>([]);
@@ -151,9 +188,10 @@ export default function ClienteDetailPage() {
 
     setLoading(true);
     try {
-      const [clienteRes, creditosRes, ccRes, evaluacionesRes, nosisRes] = await Promise.all([
+      const [clienteRes, creditosRes, chequesRes, ccRes, evaluacionesRes, nosisRes] = await Promise.all([
         apiFetch(`/api/fin/clientes/${id}`),
         apiFetch(`/api/fin/creditos?clienteId=${id}`),
+        apiFetch(`/api/fin/operaciones-cheques?clienteId=${id}`),
         apiFetch(`/api/fin/clientes/${id}/cuenta-corriente`),
         apiFetch(`/api/fin/clientes/${id}/evaluacion`),
         apiFetch(`/api/fin/clientes/${id}/nosis`),
@@ -161,6 +199,7 @@ export default function ClienteDetailPage() {
 
       const clienteData = (await clienteRes.json()) as { cliente: FinCliente };
       const creditosData = (await creditosRes.json()) as { creditos: FinCredito[] };
+      const chequesData = (await chequesRes.json()) as { operaciones: FinOperacionCheque[] };
       const ccData = (await ccRes.json()) as CuentaCorrienteData;
       const evaluacionesData = (await evaluacionesRes.json()) as { evaluaciones: FinEvaluacion[] };
       const nosisData = (await nosisRes.json()) as {
@@ -171,6 +210,7 @@ export default function ClienteDetailPage() {
 
       setCliente(clienteData.cliente);
       setCreditos(creditosData.creditos ?? []);
+      setOperacionesCheques(chequesData.operaciones ?? []);
       setCuentaCorriente(ccData);
       setEvaluaciones(evaluacionesData.evaluaciones ?? []);
       setNosisConsultas(nosisData.data?.historial ?? []);
@@ -536,6 +576,23 @@ export default function ClienteDetailPage() {
               onRowClick={(row) => router.push(`/creditos/${row.id}`)}
             />
           </div>
+
+          {operacionesCheques.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-900">Operaciones de cheques</h3>
+                <Button size="sm" variant="outline" onClick={() => router.push(`/operaciones-cheques?clienteId=${id}`)}>
+                  Ver todas
+                </Button>
+              </div>
+              <DataTable
+                columns={chequeColumns}
+                data={operacionesCheques}
+                emptyMessage="Sin operaciones de cheques."
+                onRowClick={(row) => router.push(`/operaciones-cheques/${row.id}`)}
+              />
+            </div>
+          )}
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">

@@ -254,14 +254,22 @@ export class ClienteService {
     } as FinCliente;
   }
 
-  static async list(orgId: string, limit = 50): Promise<FinCliente[]> {
+  static async list(
+    orgId: string,
+    limit = 50,
+    filters: { tipoClienteId?: string } = {}
+  ): Promise<FinCliente[]> {
     const db = getAdminFirestore();
     const safeLimit = Math.min(Math.max(limit, 1), 100);
-    const snapshot = await db
+    let query: FirebaseFirestore.Query = db
       .collection(FIN_COLLECTIONS.clientes(orgId))
-      .orderBy('updated_at', 'desc')
-      .limit(safeLimit)
-      .get();
+      .orderBy('updated_at', 'desc');
+
+    if (filters.tipoClienteId) {
+      query = query.where('tipo_cliente_id', '==', filters.tipoClienteId);
+    }
+
+    const snapshot = await query.limit(safeLimit).get();
 
     return snapshot.docs
       .map(doc => mapDoc(doc))
