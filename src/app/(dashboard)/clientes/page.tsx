@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, LayoutGrid, List, CreditCard, Filter } from "lucide-react";
+import { Plus, Search, LayoutGrid, List, CreditCard, Filter, Database } from "lucide-react";
 import type { FinCliente } from "@/types/fin-cliente";
 import type { FinTipoCliente } from "@/types/fin-tipo-cliente";
 import { apiFetch } from "@/lib/apiFetch";
@@ -70,7 +70,28 @@ export default function ClientesPage() {
   const [tipoClienteId, setTipoClienteId] = useState("");
   const [view, setView] = useState<ViewMode>("lista");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedMsg, setSeedMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSeedDemo = async () => {
+    setSeeding(true);
+    setSeedMsg(null);
+    try {
+      const res = await apiFetch("/api/fin/seed-demo", { method: "POST" });
+      const body = await res.json() as { ok?: boolean; clientes?: number; creditos?: number; error?: string };
+      if (!res.ok) {
+        setSeedMsg({ ok: false, text: body.error ?? "Error al cargar datos demo" });
+      } else {
+        setSeedMsg({ ok: true, text: `Cargados: ${body.clientes ?? 0} clientes con créditos.` });
+        fetchClientes("", "");
+      }
+    } catch {
+      setSeedMsg({ ok: false, text: "Error de conexión" });
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   // Cargar tipos de cliente para el filtro
   useEffect(() => {
@@ -183,8 +204,30 @@ export default function ClientesPage() {
         </div>
       )}
 
+      {/* Banner seed cuando no hay clientes y no hay búsqueda activa */}
+      {!loading && clientes.length === 0 && !q && !tipoClienteId && (
+        <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-amber-300 bg-amber-50 p-8 text-center">
+          <Database className="h-10 w-10 text-amber-400" />
+          <div>
+            <p className="font-semibold text-slate-800">No hay clientes todavía</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Podés cargar datos demo para probar el sistema con 8 clientes y créditos ficticios.
+            </p>
+          </div>
+          {seedMsg && (
+            <div className={`rounded-xl border px-4 py-2 text-sm ${seedMsg.ok ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+              {seedMsg.text}
+            </div>
+          )}
+          <Button onClick={handleSeedDemo} disabled={seeding} variant="default">
+            <Database className="h-4 w-4" />
+            {seeding ? "Cargando datos..." : "Cargar datos demo"}
+          </Button>
+        </div>
+      )}
+
       {/* Vista lista */}
-      {view === "lista" && (
+      {(loading || clientes.length > 0 || q || tipoClienteId) && view === "lista" && (
         <DataTable
           columns={columns}
           data={clientes}
