@@ -9,6 +9,20 @@ export const FIN_COLLECTIONS = {
   cliente: (orgId: string, id: string) =>
     `organizations/${orgId}/fin_clientes/${id}`,
 
+  tiposCliente: (orgId: string) => `organizations/${orgId}/fin_tipos_cliente`,
+  tipoCliente: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_tipos_cliente/${id}`,
+
+  politicasCrediticias: (orgId: string) =>
+    `organizations/${orgId}/fin_politicas_crediticias`,
+  politicaCrediticia: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_politicas_crediticias/${id}`,
+
+  planesFinanciacion: (orgId: string) =>
+    `organizations/${orgId}/fin_planes_financiacion`,
+  planFinanciacion: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_planes_financiacion/${id}`,
+
   creditos: (orgId: string) => `organizations/${orgId}/fin_creditos`,
   credito: (orgId: string, id: string) =>
     `organizations/${orgId}/fin_creditos/${id}`,
@@ -45,4 +59,9 @@ export const FIN_COLLECTIONS = {
   evaluaciones: (orgId: string) => `organizations/${orgId}/fin_evaluaciones`,
   evaluacion: (orgId: string, id: string) =>
     `organizations/${orgId}/fin_evaluaciones/${id}`,
+
+  scoringConfig: (orgId: string) =>
+    `organizations/${orgId}/fin_configuracion/scoring`,
+  clienteNosisConsultas: (orgId: string, clienteId: string) =>
+    `organizations/${orgId}/fin_clientes/${clienteId}/fin_consultas_nosis`,
 } as const;

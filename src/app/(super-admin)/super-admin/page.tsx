@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Building2, Plus, Users, BarChart3 } from "lucide-react";
+import { Building2, Plus, Users, BarChart3, ClipboardList } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -128,6 +128,18 @@ export default function SuperAdminDashboard() {
           <CardContent className="space-y-2">
             <NavLink href="/super-admin/usuarios" label="Ver todos los usuarios" />
             <NavLink href="/super-admin/usuarios/nuevo" label="Crear nuevo usuario" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardList className="h-4 w-4 text-amber-600" />
+              Demo Requests
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <NavLink href="/super-admin/demo-requests" label="Ver solicitudes de demo" />
           </CardContent>
         </Card>
       </div>

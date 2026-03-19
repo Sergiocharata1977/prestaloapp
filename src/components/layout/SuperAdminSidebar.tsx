@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, LayoutDashboard, Shield, Users } from "lucide-react";
+import { Building2, LayoutDashboard, Shield, Users, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/super-admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/super-admin/organizaciones", label: "Organizaciones", icon: Building2 },
   { href: "/super-admin/usuarios", label: "Usuarios", icon: Users },
+  { href: "/super-admin/demo-requests", label: "Demo Requests", icon: ClipboardList },
 ];
 
 export function SuperAdminSidebar() {

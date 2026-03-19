@@ -19,10 +19,11 @@ const creditoEstadoSchema = z.enum([
 const creditoCreateSchema = z.object({
   sucursal_id: z.string().trim().min(1, 'sucursal_id requerido'),
   cliente_id: z.string().trim().min(1, 'cliente_id requerido'),
+  plan_financiacion_id: z.string().trim().min(1).optional(),
   articulo_descripcion: z.string().trim().min(1, 'articulo_descripcion requerido'),
   articulo_codigo: z.string().trim().min(1).optional(),
   capital: z.number().finite().positive('capital debe ser mayor a cero'),
-  tasa_mensual: z.number().finite().min(0, 'tasa_mensual no puede ser negativa'),
+  tasa_mensual: z.number().finite().min(0, 'tasa_mensual no puede ser negativa').optional(),
   cantidad_cuotas: z
     .number()
     .int('cantidad_cuotas debe ser un entero')

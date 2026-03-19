@@ -1,7 +1,6 @@
 import { FIN_COLLECTIONS } from '@/firebase/collections';
 import { getAdminFirestore } from '@/firebase/admin';
-
-const CONSULTAS_SUBCOLLECTION = 'fin_consultas_nosis';
+import type { FinClienteNosisConsulta } from '@/types/fin-cliente';
 const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_API_URL = 'https://api.nosis.com/v1/consultas';
 
@@ -58,6 +57,9 @@ export interface NosisConsultaResult {
   situacion_bcra: number | null;
   cheques_rechazados: number;
   juicios_activos: number;
+  estado: 'exitoso' | 'error';
+  tiempo_respuesta_ms: number;
+  http_status: number | null;
   raw_response?: unknown;
   error?: string;
 }
@@ -79,6 +81,9 @@ export class NosisService {
         situacion_bcra: 1,
         cheques_rechazados: 0,
         juicios_activos: 0,
+        estado: 'exitoso',
+        tiempo_respuesta_ms: 0,
+        http_status: 200,
         raw_response: {
           sandbox: true,
           cuit: cuitNormalizado,
@@ -120,6 +125,9 @@ export class NosisService {
           situacion_bcra: null,
           cheques_rechazados: 0,
           juicios_activos: 0,
+          estado: 'error',
+          tiempo_respuesta_ms: Date.now() - startedAt,
+          http_status: response.status,
           raw_response: rawResponse,
           error: `Nosis API error: ${response.status}`,
         };
@@ -149,10 +157,10 @@ export class NosisService {
             ['juicios_activos'],
             ['juiciosActivos'],
           ]) ?? 0,
-        raw_response: {
-          ...payload,
-          tiempoRespuestaMs: Date.now() - startedAt,
-        },
+        estado: 'exitoso',
+        tiempo_respuesta_ms: Date.now() - startedAt,
+        http_status: response.status,
+        raw_response: payload,
       };
     } catch (error) {
       const message =
@@ -163,6 +171,9 @@ export class NosisService {
         situacion_bcra: null,
         cheques_rechazados: 0,
         juicios_activos: 0,
+        estado: 'error',
+        tiempo_respuesta_ms: Date.now() - startedAt,
+        http_status: null,
         error: message,
       };
     } finally {
@@ -177,39 +188,44 @@ export class NosisService {
     resultado: NosisConsultaResult,
     usuarioId: string,
     usuarioNombre: string
-  ): Promise<void> {
+  ): Promise<FinClienteNosisConsulta> {
     const db = getAdminFirestore();
     const now = new Date().toISOString();
-    const rawResponse =
-      resultado.raw_response &&
-      typeof resultado.raw_response === 'object' &&
-      'tiempoRespuestaMs' in (resultado.raw_response as Record<string, unknown>)
-        ? (resultado.raw_response as Record<string, unknown>)
-        : null;
-    const tiempoRespuestaMs = rawResponse
-      ? extractNumber(rawResponse.tiempoRespuestaMs) ?? 0
-      : 0;
+    const ref = db.collection(FIN_COLLECTIONS.clienteNosisConsultas(orgId, clienteId)).doc();
+    const payload: FinClienteNosisConsulta = {
+      id: ref.id,
+      cuit: normalizeDigits(cuit),
+      fecha_consulta: now,
+      fechaConsulta: now,
+      tipo_consulta: 'completo',
+      tipoConsulta: 'completo',
+      score: resultado.score,
+      scoreObtenido: resultado.score,
+      situacion_bcra: resultado.situacion_bcra,
+      situacionBcra: resultado.situacion_bcra,
+      cheques_rechazados: resultado.cheques_rechazados,
+      chequesRechazados: resultado.cheques_rechazados,
+      juicios_activos: resultado.juicios_activos,
+      juiciosActivos: resultado.juicios_activos,
+      estado: resultado.estado,
+      tiempo_respuesta_ms: resultado.tiempo_respuesta_ms,
+      tiempoRespuestaMs: resultado.tiempo_respuesta_ms,
+      http_status: resultado.http_status,
+      solicitadoPor: {
+        userId: usuarioId,
+        nombre: usuarioNombre,
+      },
+      consultado_por: {
+        user_id: usuarioId,
+        nombre: usuarioNombre,
+      },
+      error_mensaje: resultado.error,
+      errorMensaje: resultado.error,
+      raw_response: resultado.raw_response,
+      createdAt: now,
+    };
 
-    await db
-      .doc(FIN_COLLECTIONS.cliente(orgId, clienteId))
-      .collection(CONSULTAS_SUBCOLLECTION)
-      .add({
-        cuit: normalizeDigits(cuit),
-        fechaConsulta: now,
-        tipoConsulta: 'completo',
-        scoreObtenido: resultado.score,
-        situacionBcra: resultado.situacion_bcra,
-        chequesRechazados: resultado.cheques_rechazados,
-        juiciosActivos: resultado.juicios_activos,
-        estado: resultado.error ? 'error' : 'exitoso',
-        tiempoRespuestaMs,
-        solicitadoPor: {
-          userId: usuarioId,
-          nombre: usuarioNombre,
-        },
-        errorMensaje: resultado.error,
-        responseRecibido: resultado.raw_response,
-        createdAt: now,
-      });
+    await ref.set(payload);
+    return payload;
   }
 }

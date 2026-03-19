@@ -21,8 +21,32 @@ type AuthContextValue = {
   loading: boolean;
   organizationId: string | null;
   role: string | null;
+  capabilities: string[];
   signOut: () => Promise<void>;
 };
+
+function readCapabilities(claims: Record<string, unknown>): string[] {
+  const candidates = [
+    claims.capabilities,
+    claims.organizationCapabilities,
+    claims.orgCapabilities,
+    claims.features,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate.filter((value): value is string => typeof value === "string");
+    }
+
+    if (candidate && typeof candidate === "object") {
+      return Object.entries(candidate)
+        .filter(([, value]) => value === true)
+        .map(([key]) => key);
+    }
+  }
+
+  return [];
+}
 
 export const AuthContext = createContext<AuthContextValue | undefined>(
   undefined
@@ -33,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [capabilities, setCapabilities] = useState<string[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
@@ -42,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setOrganizationId(null);
         setRole(null);
+        setCapabilities([]);
         setLoading(false);
         return;
       }
@@ -60,10 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(nextUser);
         setOrganizationId(nextOrganizationId);
         setRole(nextRole);
+        setCapabilities(readCapabilities(tokenResult.claims));
       } catch {
         setUser(nextUser);
         setOrganizationId(null);
         setRole(null);
+        setCapabilities([]);
       } finally {
         setLoading(false);
       }
@@ -78,9 +106,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       organizationId,
       role,
+      capabilities,
       signOut: () => firebaseSignOut(auth),
     }),
-    [loading, organizationId, role, user]
+    [capabilities, loading, organizationId, role, user]
   );
 
   return createElement(AuthContext.Provider, { value }, children);

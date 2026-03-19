@@ -1,6 +1,8 @@
 import React from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, ChevronRight, LayoutDashboard, Search, Settings, Wallet, BarChart3, Calendar, Users, Percent } from "lucide-react";
+import Image from "next/image";
+import { ArrowRight, CheckCircle2, LayoutDashboard, Settings, Wallet, BarChart3, Calendar, Users, Percent } from "lucide-react";
+import { DemoRequestForm } from "@/components/public/DemoRequestForm";
 
 export default function LandingPage() {
   return (
@@ -187,7 +189,7 @@ export default function LandingPage() {
                 <li className="flex items-center gap-3"><CheckCircle2 className="w-5 h-5 text-gray-400" /> 2 usuarios administradores</li>
                 <li className="flex items-center gap-3"><CheckCircle2 className="w-5 h-5 text-gray-400" /> Soporte por email</li>
               </ul>
-              <button className="w-full py-3 rounded-full border-2 border-gray-200 text-gray-700 font-semibold hover:border-gray-300 transition-colors">Consultar</button>
+              <a href="#demo-request-form" className="inline-flex w-full items-center justify-center py-3 rounded-full border-2 border-gray-200 text-gray-700 font-semibold hover:border-gray-300 transition-colors">Consultar</a>
             </div>
             
             {/* Pro */}
@@ -203,7 +205,7 @@ export default function LandingPage() {
                 <li className="flex items-center gap-3"><CheckCircle2 className="w-5 h-5 text-brand-mint" /> Contabilidad avanzada</li>
                 <li className="flex items-center gap-3"><CheckCircle2 className="w-5 h-5 text-brand-mint" /> Soporte prioritario 24/7</li>
               </ul>
-              <button className="w-full py-3 rounded-full bg-brand-accent hover:bg-amber-600 text-white font-semibold transition-colors">Consultar</button>
+              <a href="#demo-request-form" className="inline-flex w-full items-center justify-center py-3 rounded-full bg-brand-accent hover:bg-amber-600 text-white font-semibold transition-colors">Consultar</a>
             </div>
           </div>
         </div>
@@ -219,7 +221,7 @@ export default function LandingPage() {
           </p>
           <div className="flex items-center justify-center gap-4">
             <div className="w-12 h-12 bg-gray-400 rounded-full overflow-hidden flex items-center justify-center">
-               <img src="https://i.pravatar.cc/100?img=11" alt="Gerente" className="w-full h-full object-cover" />
+               <Image src="https://i.pravatar.cc/100?img=11" alt="Gerente" width={48} height={48} className="w-full h-full object-cover" />
             </div>
             <div className="text-left">
               <p className="font-bold text-lg text-brand-mint">Roberto Sánchez</p>
@@ -238,9 +240,34 @@ export default function LandingPage() {
             <Link href="/clientes" className="bg-brand-accent hover:bg-amber-600 text-white font-medium px-8 py-4 rounded-full transition-all duration-200 text-lg">
               Empezar gratis
             </Link>
-            <button className="bg-transparent border-2 border-brand-primary text-brand-primary hover:bg-brand-primary/5 font-medium px-8 py-4 rounded-full transition-all duration-200 text-lg">
+            <a href="#demo-request-form" className="bg-transparent border-2 border-brand-primary text-brand-primary hover:bg-brand-primary/5 font-medium px-8 py-4 rounded-full transition-all duration-200 text-lg">
               Ver demo
-            </button>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-24">
+        <div className="mx-auto grid max-w-6xl gap-10 px-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="space-y-6 text-left">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-accent">
+              Solicitar Demo
+            </p>
+            <h2 className="text-4xl font-bold font-heading text-brand-text">
+              Contanos cómo operás y te armamos una demo sobre tu caso real.
+            </h2>
+            <p className="text-lg text-gray-600">
+              El pedido entra directo al portal super admin y se puede convertir en una
+              organización activa con un click.
+            </p>
+            <div className="rounded-[2rem] border border-brand-mint bg-brand-mint/40 p-6 text-left text-sm text-gray-700">
+              Incluye setup inicial, usuario administrador y credenciales temporales para
+              empezar pruebas.
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-gray-100 bg-[#fffdf9] p-8 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+            <DemoRequestForm />
           </div>
         </div>
       </section>

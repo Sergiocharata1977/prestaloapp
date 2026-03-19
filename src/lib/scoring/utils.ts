@@ -1,25 +1,28 @@
-// Utilidades PURAS de scoring — sin dependencias de servidor.
-// Seguro para importar desde 'use client' y desde server components.
-import type { EvaluacionTier, ScoringItem } from '@/types/fin-evaluacion';
+// Utilidades puras de scoring, seguras para client y server.
+import type {
+  EvaluacionTier,
+  FinScoringConfigUpdateInput,
+  ScoringCategoria,
+  ScoringCategoriaPesos,
+  ScoringItem,
+  ScoringTierConfig,
+} from '@/types/fin-evaluacion';
 
 export const SCORING_ITEMS_CATALOG: Omit<ScoringItem, 'puntaje' | 'nota'>[] = [
-  // CUALITATIVOS — 7 ítems
-  { id: 'gestion_empresa', categoria: 'cualitativo', nombre: 'Gestión general de la empresa', peso: 1 },
+  { id: 'gestion_empresa', categoria: 'cualitativo', nombre: 'Gestion general de la empresa', peso: 1 },
   { id: 'condiciones_mercado', categoria: 'cualitativo', nombre: 'Condiciones del mercado/sector', peso: 1 },
-  { id: 'organizacion_interna', categoria: 'cualitativo', nombre: 'Organización interna', peso: 1 },
-  { id: 'situacion_cheques', categoria: 'cualitativo', nombre: 'Situación de cheques', peso: 1 },
-  { id: 'terminos_pago', categoria: 'cualitativo', nombre: 'Términos de pago con proveedores', peso: 1 },
+  { id: 'organizacion_interna', categoria: 'cualitativo', nombre: 'Organizacion interna', peso: 1 },
+  { id: 'situacion_cheques', categoria: 'cualitativo', nombre: 'Situacion de cheques', peso: 1 },
+  { id: 'terminos_pago', categoria: 'cualitativo', nombre: 'Terminos de pago con proveedores', peso: 1 },
   { id: 'crecimiento_ventas', categoria: 'cualitativo', nombre: 'Crecimiento de ventas', peso: 1 },
-  { id: 'fidelizacion', categoria: 'cualitativo', nombre: 'Historia y fidelización', peso: 1 },
-  // CONFLICTOS — 3 ítems
+  { id: 'fidelizacion', categoria: 'cualitativo', nombre: 'Historia y fidelizacion', peso: 1 },
   { id: 'concursos_quiebras', categoria: 'conflictos', nombre: 'Concursos o quiebras pasadas', peso: 1 },
-  { id: 'situacion_fiscal', categoria: 'conflictos', nombre: 'Situación fiscal/impositiva', peso: 1 },
+  { id: 'situacion_fiscal', categoria: 'conflictos', nombre: 'Situacion fiscal/impositiva', peso: 1 },
   { id: 'cheques_rechazados', categoria: 'conflictos', nombre: 'Cheques rechazados en el sistema', peso: 1 },
-  // CUANTITATIVOS — 4 ítems
-  { id: 'situacion_economica', categoria: 'cuantitativo', nombre: 'Situación económica general', peso: 1 },
+  { id: 'situacion_economica', categoria: 'cuantitativo', nombre: 'Situacion economica general', peso: 1 },
   { id: 'situacion_financiera', categoria: 'cuantitativo', nombre: 'Ratios financieros', peso: 1 },
-  { id: 'volumenes_negocio', categoria: 'cuantitativo', nombre: 'Volúmenes de negocio', peso: 1 },
-  { id: 'situacion_patrimonial', categoria: 'cuantitativo', nombre: 'Patrimonio neto y garantías', peso: 1 },
+  { id: 'volumenes_negocio', categoria: 'cuantitativo', nombre: 'Volumenes de negocio', peso: 1 },
+  { id: 'situacion_patrimonial', categoria: 'cuantitativo', nombre: 'Patrimonio neto y garantias', peso: 1 },
 ];
 
 export type ScoreResult = {
@@ -30,26 +33,64 @@ export type ScoreResult = {
   tier: EvaluacionTier;
 };
 
-function promedio(items: ScoringItem[], categoria: ScoringItem['categoria']): number {
-  const filtered = items.filter((i) => i.categoria === categoria && i.puntaje !== null);
-  if (filtered.length === 0) return 0;
-  return filtered.reduce((acc, i) => acc + (i.puntaje as number), 0) / filtered.length;
+export const DEFAULT_SCORING_PESOS: ScoringCategoriaPesos = {
+  cualitativo: 0.43,
+  conflictos: 0.31,
+  cuantitativo: 0.26,
+};
+
+export const DEFAULT_SCORING_TIERS: ScoringTierConfig[] = [
+  { tier: 'A', min_score: 8, max_score: null },
+  { tier: 'B', min_score: 6, max_score: 7.99 },
+  { tier: 'C', min_score: 4, max_score: 5.99 },
+  { tier: 'reprobado', min_score: 0, max_score: 3.99 },
+];
+
+export const DEFAULT_SCORING_CONFIG: FinScoringConfigUpdateInput = {
+  pesos_categoria: DEFAULT_SCORING_PESOS,
+  tiers: DEFAULT_SCORING_TIERS,
+  frecuencia_vigencia_meses: 6,
+};
+
+function promedio(items: ScoringItem[], categoria: ScoringCategoria): number {
+  const filtered = items.filter(item => item.categoria === categoria && item.puntaje !== null);
+  if (filtered.length === 0) {
+    return 0;
+  }
+
+  return filtered.reduce((acc, item) => acc + (item.puntaje as number), 0) / filtered.length;
 }
 
-export function resolverTier(scoreFinal: number): EvaluacionTier {
-  if (scoreFinal >= 8.0) return 'A';
-  if (scoreFinal >= 6.0) return 'B';
-  if (scoreFinal >= 4.0) return 'C';
-  return 'reprobado';
+export function resolverTier(
+  scoreFinal: number,
+  tiers: ScoringTierConfig[] = DEFAULT_SCORING_TIERS
+): EvaluacionTier {
+  const sorted = [...tiers].sort((a, b) => b.min_score - a.min_score);
+  const match = sorted.find(tier => {
+    const maxScoreOk = tier.max_score === null || scoreFinal <= tier.max_score;
+    return scoreFinal >= tier.min_score && maxScoreOk;
+  });
+
+  return match?.tier ?? 'reprobado';
 }
 
-export function calcularScore(items: ScoringItem[]): ScoreResult {
+export function calcularScore(
+  items: ScoringItem[],
+  config: FinScoringConfigUpdateInput = DEFAULT_SCORING_CONFIG
+): ScoreResult {
   const score_cualitativo = promedio(items, 'cualitativo');
   const score_conflictos = promedio(items, 'conflictos');
   const score_cuantitativo = promedio(items, 'cuantitativo');
   const score_final =
-    score_cualitativo * 0.43 +
-    score_conflictos * 0.31 +
-    score_cuantitativo * 0.26;
-  return { score_cualitativo, score_conflictos, score_cuantitativo, score_final, tier: resolverTier(score_final) };
+    score_cualitativo * config.pesos_categoria.cualitativo +
+    score_conflictos * config.pesos_categoria.conflictos +
+    score_cuantitativo * config.pesos_categoria.cuantitativo;
+
+  return {
+    score_cualitativo,
+    score_conflictos,
+    score_cuantitativo,
+    score_final,
+    tier: resolverTier(score_final, config.tiers),
+  };
 }

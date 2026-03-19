@@ -3,6 +3,7 @@ import { getAdminFirestore } from '@/firebase/admin';
 import type {
   FinCliente,
   FinClienteCreateInput,
+  FinClienteNosisConsulta,
   FinClienteNosisUltimo,
 } from '@/types/fin-cliente';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -319,6 +320,25 @@ export class ClienteService {
       nosis_ultimo: nosis,
       updated_at: nowIso(),
     });
+  }
+
+  static async listarConsultasNosis(
+    orgId: string,
+    clienteId: string,
+    limit = 20
+  ): Promise<FinClienteNosisConsulta[]> {
+    const db = getAdminFirestore();
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    const snapshot = await db
+      .collection(FIN_COLLECTIONS.clienteNosisConsultas(orgId, clienteId))
+      .orderBy('fecha_consulta', 'desc')
+      .limit(safeLimit)
+      .get();
+
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as FinClienteNosisConsulta[];
   }
 
   static async incrementarCreditosActivos(

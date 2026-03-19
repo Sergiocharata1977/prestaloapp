@@ -1,10 +1,14 @@
 import { FIN_COLLECTIONS } from '@/firebase/collections';
 import { getAdminFirestore } from '@/firebase/admin';
 import { AmortizationService } from '@/services/AmortizationService';
+import { PlanFinanciacionService } from '@/services/PlanFinanciacionService';
 import type { FinAsiento, FinAsientoLinea } from '@/types/fin-asiento';
 import type { FinConfigCuentas, FinCuenta } from '@/types/fin-plan-cuentas';
 import type { FinCredito, FinCreditoCreateInput, FinCreditoEstado } from '@/types/fin-credito';
 import type { FinCuota, FinCuotaEstado } from '@/types/fin-cuota';
+import type { FinPlanFinanciacion } from '@/types/fin-plan-financiacion';
+import type { FinPoliticaCrediticia } from '@/types/fin-politica-crediticia';
+import type { FinTipoCliente } from '@/types/fin-tipo-cliente';
 import { FieldValue } from 'firebase-admin/firestore';
 
 type CreditoListFilters = {
@@ -223,6 +227,80 @@ function buildAsientoOtorgamiento(
 }
 
 export class CreditoService {
+  static async resolveTasaInput(
+    orgId: string,
+    input: Pick<
+      FinCreditoCreateInput,
+      | 'cantidad_cuotas'
+      | 'plan_financiacion_id'
+      | 'tasa_mensual'
+      | 'tipo_cliente_id'
+      | 'politica_crediticia_id'
+      | 'plan_snapshot'
+      | 'politica_snapshot'
+      | 'tipo_cliente_snapshot'
+    >
+  ): Promise<{
+    tasaMensual: number;
+    plan?: FinPlanFinanciacion;
+    politica?: FinPoliticaCrediticia;
+    tipoCliente?: FinTipoCliente;
+  }> {
+    const db = getAdminFirestore();
+
+    if (!input.plan_financiacion_id) {
+      if (typeof input.tasa_mensual !== 'number') {
+        throw new Error('tasa_mensual requerida');
+      }
+
+      return { tasaMensual: input.tasa_mensual };
+    }
+
+    const planSnap = await db
+      .doc(FIN_COLLECTIONS.planFinanciacion(orgId, input.plan_financiacion_id))
+      .get();
+
+    if (!planSnap.exists) {
+      throw new Error('Plan de financiacion no encontrado');
+    }
+
+    const plan = {
+      id: planSnap.id,
+      ...planSnap.data(),
+    } as FinPlanFinanciacion;
+
+    const politicaSnap = await db
+      .doc(FIN_COLLECTIONS.politicaCrediticia(orgId, plan.politica_id))
+      .get();
+
+    if (!politicaSnap.exists) {
+      throw new Error('Politica crediticia no encontrada');
+    }
+
+    const politica = {
+      id: politicaSnap.id,
+      ...politicaSnap.data(),
+    } as FinPoliticaCrediticia;
+
+    const tipoClienteSnap = await db
+      .doc(FIN_COLLECTIONS.tipoCliente(orgId, politica.tipo_cliente_id))
+      .get();
+
+    const tipoCliente = tipoClienteSnap.exists
+      ? ({
+          id: tipoClienteSnap.id,
+          ...tipoClienteSnap.data(),
+        } as FinTipoCliente)
+      : undefined;
+
+    return {
+      tasaMensual: PlanFinanciacionService.resolverTasa(plan, input.cantidad_cuotas),
+      plan,
+      politica,
+      tipoCliente,
+    };
+  }
+
   static async crear(
     orgId: string,
     input: FinCreditoCreateInput,
@@ -234,9 +312,10 @@ export class CreditoService {
     tabla_amortizacion: ReturnType<typeof AmortizationService.calcular>;
   }> {
     const db = getAdminFirestore();
+    const tasaData = await this.resolveTasaInput(orgId, input);
     const tablaAmortizacion = AmortizationService.calcular(
       input.capital,
-      input.tasa_mensual,
+      tasaData.tasaMensual / 100,
       input.cantidad_cuotas,
       input.sistema,
       input.fecha_primer_vencimiento
@@ -306,12 +385,73 @@ export class CreditoService {
         organization_id: orgId,
         sucursal_id: input.sucursal_id,
         cliente_id: input.cliente_id,
+        tipo_cliente_id:
+          input.tipo_cliente_id ??
+          tasaData.tipoCliente?.id ??
+          input.tipo_cliente_snapshot?.id,
         numero_credito: numeroCredito,
         articulo_descripcion: input.articulo_descripcion.trim(),
         articulo_codigo: input.articulo_codigo?.trim() || undefined,
+        tipo_operacion:
+          input.tipo_operacion ??
+          tasaData.politica?.tipo_operacion ??
+          input.politica_snapshot?.tipo_operacion,
+        politica_crediticia_id:
+          input.politica_crediticia_id ??
+          tasaData.politica?.id ??
+          input.politica_snapshot?.id,
+        plan_financiacion_id:
+          input.plan_financiacion_id ??
+          tasaData.plan?.id ??
+          input.plan_snapshot?.id,
+        tipo_cliente_snapshot:
+          input.tipo_cliente_snapshot ??
+          (tasaData.tipoCliente
+            ? {
+                id: tasaData.tipoCliente.id,
+                codigo: tasaData.tipoCliente.codigo,
+                nombre: tasaData.tipoCliente.nombre,
+                tipo_base: tasaData.tipoCliente.tipo_base,
+              }
+            : undefined),
+        politica_snapshot:
+          input.politica_snapshot ??
+          (tasaData.politica
+            ? {
+                id: tasaData.politica.id,
+                codigo: tasaData.politica.codigo,
+                nombre: tasaData.politica.nombre,
+                tipo_operacion: tasaData.politica.tipo_operacion,
+                requiere_legajo: tasaData.politica.requiere_legajo,
+                requiere_evaluacion_vigente:
+                  tasaData.politica.requiere_evaluacion_vigente,
+                limite_mensual: tasaData.politica.limite_mensual,
+                limite_total: tasaData.politica.limite_total,
+                tiers: tasaData.politica.tiers,
+              }
+            : undefined),
+        plan_snapshot:
+          input.plan_snapshot ??
+          (tasaData.plan
+            ? {
+                id: tasaData.plan.id,
+                nombre: tasaData.plan.nombre,
+                tramos_tasa: tasaData.plan.tramos_tasa,
+                tasa_punitoria_mensual: tasaData.plan.tasa_punitoria_mensual,
+                cargo_fijo: tasaData.plan.cargo_fijo,
+                cargo_variable_pct: tasaData.plan.cargo_variable_pct,
+              }
+            : undefined),
         capital: round2(input.capital),
-        tasa_mensual: input.tasa_mensual,
+        tasa_mensual: tasaData.tasaMensual,
         cantidad_cuotas: input.cantidad_cuotas,
+        snapshot_tasa_mensual_pct: tasaData.tasaMensual,
+        snapshot_tasa_punitoria_mensual:
+          tasaData.plan?.tasa_punitoria_mensual ?? input.plan_snapshot?.tasa_punitoria_mensual,
+        snapshot_cargo_fijo:
+          tasaData.plan?.cargo_fijo ?? input.plan_snapshot?.cargo_fijo,
+        snapshot_cargo_variable_pct:
+          tasaData.plan?.cargo_variable_pct ?? input.plan_snapshot?.cargo_variable_pct,
         sistema: input.sistema,
         total_intereses: tablaAmortizacion.total_intereses,
         total_credito: tablaAmortizacion.total_credito,
