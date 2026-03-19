@@ -13,7 +13,7 @@ import type { FinPlanFinanciacion } from "@/types/fin-plan-financiacion";
 import type { FinPoliticaCrediticia } from "@/types/fin-politica-crediticia";
 import type { FinSucursal } from "@/types/fin-sucursal";
 import type { TablaAmortizacion } from "@/services/AmortizationService";
-import { PlanFinanciacionService } from "@/services/PlanFinanciacionService";
+import { resolverTasa } from "@/lib/fin/planUtils";
 import { apiFetch } from "@/lib/apiFetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -266,7 +266,7 @@ export function NuevoCreditoDialog({
       return;
     }
 
-    const tasa = PlanFinanciacionService.resolverTasa(
+    const tasa = resolverTasa(
       planSeleccionado,
       currentValues.cantidad_cuotas
     );

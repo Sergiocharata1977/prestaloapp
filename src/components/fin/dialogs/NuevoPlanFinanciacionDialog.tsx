@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus, Trash2 } from "lucide-react";
 import type { FinPoliticaCrediticia } from "@/types/fin-politica-crediticia";
-import { PlanFinanciacionService } from "@/services/PlanFinanciacionService";
+import { ordenarTramos } from "@/lib/fin/planUtils";
 import { apiFetch } from "@/lib/apiFetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,7 +84,7 @@ export function NuevoPlanFinanciacionDialog({ open, onOpenChange, onSuccess }: P
 
   const values = watch();
   const orderedPreview = useMemo(
-    () => PlanFinanciacionService.ordenarTramos((values.tramos_tasa ?? []).filter((tramo) => Number.isFinite(tramo.cantidad_cuotas) && Number.isFinite(tramo.tasa_mensual))),
+    () => ordenarTramos((values.tramos_tasa ?? []).filter((tramo) => Number.isFinite(tramo.cantidad_cuotas) && Number.isFinite(tramo.tasa_mensual))),
     [values.tramos_tasa]
   );
 
@@ -117,7 +117,7 @@ export function NuevoPlanFinanciacionDialog({ open, onOpenChange, onSuccess }: P
     try {
       const payload = {
         ...formValues,
-        tramos_tasa: PlanFinanciacionService.ordenarTramos(formValues.tramos_tasa),
+        tramos_tasa: ordenarTramos(formValues.tramos_tasa),
       };
 
       const res = await apiFetch("/api/fin/planes-financiacion", {
