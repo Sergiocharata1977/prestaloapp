@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { apiFetch } from "@/lib/apiFetch";
+import { NuevoCobroDialog } from "@/components/fin/dialogs/NuevoCobroDialog";
 
 function ars(n: number) {
   return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
@@ -71,6 +72,7 @@ export default function CreditoDetailPage() {
   const [credito, setCredito] = useState<FinCredito | null>(null);
   const [cuotas, setCuotas] = useState<FinCuota[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cobroDialog, setCobroDialog] = useState<{ cuotaId: string; creditoId: string } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -352,7 +354,7 @@ export default function CreditoDetailPage() {
                       variant="secondary"
                       onClick={(e) => {
                         e.stopPropagation();
-                        router.push(`/cobros/nuevo?cuotaId=${cuota.id}&creditoId=${credito.id}`);
+                        setCobroDialog({ cuotaId: cuota.id, creditoId: credito.id });
                       }}
                     >
                       Cobrar
@@ -384,6 +386,22 @@ export default function CreditoDetailPage() {
         <p className="text-sm text-slate-500">
           {cuotasPendientes.length} cuota(s) pendiente(s) de cobro.
         </p>
+      )}
+
+      {cobroDialog && (
+        <NuevoCobroDialog
+          open={!!cobroDialog}
+          onOpenChange={(open) => { if (!open) setCobroDialog(null); }}
+          cuotaId={cobroDialog.cuotaId}
+          creditoId={cobroDialog.creditoId}
+          onSuccess={() => {
+            setCobroDialog(null);
+            void Promise.all([
+              apiFetch(`/api/fin/creditos/${id}`).then((r) => r.json()).then((d) => setCredito(d as FinCredito)),
+              apiFetch(`/api/fin/creditos/${id}/cuotas`).then((r) => r.json()).then((d) => setCuotas((d as { cuotas: FinCuota[] }).cuotas ?? [])),
+            ]);
+          }}
+        />
       )}
     </div>
   );

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Plus, RefreshCcw } from "lucide-react";
+import { Building2, Plus, RefreshCcw, Users } from "lucide-react";
 import { apiFetch } from "@/lib/apiFetch";
 import type { Column } from "@/components/ui/data-table";
 import { DataTable } from "@/components/ui/data-table";
@@ -153,13 +153,19 @@ export default function SuperAdminOrganizationsPage() {
       {
         key: "actions",
         header: "Acciones",
-        width: "220px",
+        width: "280px",
         className: "text-right",
         render: (organization) => (
           <div
             className="flex items-center justify-end gap-2"
             onClick={(event) => event.stopPropagation()}
           >
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/super-admin/usuarios?orgId=${organization.id}`}>
+                <Users className="h-3.5 w-3.5" />
+                Usuarios
+              </Link>
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -167,7 +173,7 @@ export default function SuperAdminOrganizationsPage() {
                 router.push(`/super-admin/organizaciones/${organization.id}`)
               }
             >
-              Ver detalle
+              Detalle
             </Button>
             <Button
               variant="ghost"

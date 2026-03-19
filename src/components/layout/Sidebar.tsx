@@ -16,6 +16,7 @@ import {
   MonitorSmartphone,
   Scale,
   Settings,
+  UserCircle2,
   Users,
   Wallet,
 } from "lucide-react";
@@ -28,12 +29,13 @@ import { cn } from "@/lib/utils";
 // ---------------------------------------------------------------------------
 
 const mainItems = [
-  { href: "/dashboard",          label: "Dashboard",      icon: LayoutDashboard },
-  { href: "/clientes",           label: "Clientes",       icon: Users },
-  { href: "/creditos",           label: "Creditos",       icon: CreditCard },
-  { href: "/operaciones-cheques",label: "Cheques",        icon: ClipboardList },
-  { href: "/cobros",             label: "Cobros",         icon: Wallet },
-  { href: "/cajas",              label: "Cajas",          icon: BriefcaseBusiness },
+  { href: "/dashboard",           label: "Dashboard",  icon: LayoutDashboard },
+  { href: "/clientes",            label: "Clientes",   icon: Users },
+  { href: "/creditos",            label: "Creditos",   icon: CreditCard },
+  { href: "/operaciones-cheques", label: "Cheques",    icon: ClipboardList },
+  { href: "/cobros",              label: "Cobros",     icon: Wallet },
+  { href: "/cajas",               label: "Cajas",      icon: BriefcaseBusiness },
+  { href: "/usuarios",            label: "Usuarios",   icon: UserCircle2 },
 ];
 
 const configItems = [
@@ -128,7 +130,14 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* Configuración — desplegable */}
+        {/* Bottom nav */}
+        <nav className="mt-6 grid gap-1">
+          {bottomItems.map(({ href, icon, label }) => (
+            <NavLink key={href} href={href} icon={icon} label={label} pathname={pathname} />
+          ))}
+        </nav>
+
+        {/* Configuración — desplegable — al fondo */}
         <div className="mt-6">
           <button
             type="button"
@@ -159,13 +168,6 @@ export function Sidebar() {
             </div>
           )}
         </div>
-
-        {/* Bottom nav */}
-        <nav className="mt-6 grid gap-1">
-          {bottomItems.map(({ href, icon, label }) => (
-            <NavLink key={href} href={href} icon={icon} label={label} pathname={pathname} />
-          ))}
-        </nav>
 
         {/* IT / Gobierno */}
         {visibleCapabilityItems.length > 0 && (

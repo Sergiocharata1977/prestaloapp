@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus, RefreshCcw, Shield, UserCog, Users } from "lucide-react";
 import { apiFetch } from "@/lib/apiFetch";
 import type { Column } from "@/components/ui/data-table";
@@ -84,6 +85,8 @@ function StatusBadge({ disabled }: { disabled: boolean }) {
 }
 
 export default function SuperAdminUsersPage() {
+  const searchParams = useSearchParams();
+  const filterOrgId = searchParams.get("orgId");
   const [users, setUsers] = useState<SuperAdminUser[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
@@ -294,16 +297,26 @@ export default function SuperAdminUsersPage() {
     }
   }
 
+  const filteredUsers = useMemo(
+    () => filterOrgId ? users.filter((u) => u.organizationId === filterOrgId) : users,
+    [users, filterOrgId]
+  );
+
+  const filterOrgName = useMemo(
+    () => filterOrgId ? (organizations.find((o) => o.id === filterOrgId)?.name ?? filterOrgId) : null,
+    [filterOrgId, organizations]
+  );
+
   const stats = useMemo(() => {
-    const active = users.filter((user) => !user.disabled).length;
-    const superAdmins = users.filter((user) => user.role === "super_admin").length;
+    const active = filteredUsers.filter((user) => !user.disabled).length;
+    const superAdmins = filteredUsers.filter((user) => user.role === "super_admin").length;
 
     return {
-      total: users.length,
+      total: filteredUsers.length,
       active,
       superAdmins,
     };
-  }, [users]);
+  }, [filteredUsers]);
 
   const columns: Column<SuperAdminUser>[] = [
     {
@@ -379,7 +392,11 @@ export default function SuperAdminUsersPage() {
           </p>
           <h1 className="text-2xl font-bold text-slate-900">Usuarios globales</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Gestión centralizada de accesos, claims y reseteo de credenciales.
+            {filterOrgName ? (
+              <>Filtrando por organización: <strong>{filterOrgName}</strong>{" "}
+                <Link href="/super-admin/usuarios" className="text-blue-600 hover:underline">Ver todos</Link>
+              </>
+            ) : "Gestión centralizada de accesos, claims y reseteo de credenciales."}
           </p>
         </div>
 
@@ -451,7 +468,7 @@ export default function SuperAdminUsersPage() {
         <CardContent>
           <DataTable
             columns={columns}
-            data={users}
+            data={filteredUsers}
             loading={loading}
             emptyMessage="Todavía no hay usuarios registrados."
             onRowClick={openEditDialog}
