@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, List, Plus } from "lucide-react";
+import { CircleDollarSign, LayoutGrid, List, Plus, WalletCards } from "lucide-react";
 import type { FinCredito } from "@/types/fin-credito";
 import { NuevoCreditoDialog } from "@/components/fin/dialogs/NuevoCreditoDialog";
 import { StatusBadge } from "@/components/fin/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { apiFetch } from "@/lib/apiFetch";
 import {
@@ -80,6 +81,25 @@ export default function CreditosPage() {
     fetchCreditos(estado);
   }, [estado]);
 
+  const summary = useMemo(() => {
+    const creditosVigentes = creditos.filter((credito) => credito.estado === "activo");
+
+    const carteraSinVencer = creditosVigentes.reduce(
+      (acc, credito) => acc + (credito.saldo_capital ?? 0),
+      0
+    );
+    const capitalColocado = creditos.reduce(
+      (acc, credito) => acc + (credito.capital ?? 0),
+      0
+    );
+
+    return {
+      carteraSinVencer,
+      capitalColocado,
+      creditosVigentes: creditosVigentes.length,
+    };
+  }, [creditos]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -138,6 +158,42 @@ export default function CreditosPage() {
             <LayoutGrid className="h-4 w-4" />
           </button>
         </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {[
+          {
+            label: "Cartera sin vencer",
+            value: ars(summary.carteraSinVencer),
+            detail: `${summary.creditosVigentes} credito(s) vigentes`,
+            icon: WalletCards,
+          },
+          {
+            label: "Capital colocado",
+            value: ars(summary.capitalColocado),
+            detail: `${creditos.length} operacion(es) en vista`,
+            icon: CircleDollarSign,
+          },
+          {
+            label: "Creditos vigentes",
+            value: String(summary.creditosVigentes),
+            detail: "Solo estado activo",
+            icon: List,
+          },
+        ].map(({ icon: Icon, label, value, detail }) => (
+          <Card key={label}>
+            <CardContent className="flex items-center gap-4 pt-6">
+              <div className="rounded-2xl bg-amber-100 p-3 text-amber-700">
+                <Icon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">{label}</p>
+                <p className="text-2xl font-semibold text-slate-900">{value}</p>
+                <p className="text-xs text-slate-400">{detail}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {view === "lista" && (

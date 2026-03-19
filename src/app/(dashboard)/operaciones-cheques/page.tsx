@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Building2, CircleDollarSign, Plus, ReceiptText } from "lucide-react";
+import {
+  ArrowRight,
+  Building2,
+  CircleDollarSign,
+  Plus,
+  ReceiptText,
+  WalletCards,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
@@ -86,6 +93,37 @@ export default function OperacionesChequesPage() {
     );
   }, [operations]);
 
+  const carteraSinVencer = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return operations.reduce(
+      (acc, operation) => {
+        if (operation.estado === "liquidada" || operation.estado === "rechazada") {
+          return acc;
+        }
+
+        const nominalVigente = operation.cheques.reduce((subtotal, cheque) => {
+          const fechaPago = new Date(`${cheque.fechaPago}T00:00:00`);
+          if (Number.isNaN(fechaPago.getTime()) || fechaPago < today) {
+            return subtotal;
+          }
+          return subtotal + cheque.nominal;
+        }, 0);
+
+        return {
+          nominal: acc.nominal + nominalVigente,
+          operaciones: acc.operaciones + (nominalVigente > 0 ? 1 : 0),
+          cheques: acc.cheques + operation.cheques.filter((cheque) => {
+            const fechaPago = new Date(`${cheque.fechaPago}T00:00:00`);
+            return !Number.isNaN(fechaPago.getTime()) && fechaPago >= today;
+          }).length,
+        };
+      },
+      { nominal: 0, operaciones: 0, cheques: 0 }
+    );
+  }, [operations]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -112,24 +150,33 @@ export default function OperacionesChequesPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
           {
-            label: "Nominal operado",
-            value: ars(summary.nominal),
-            icon: CircleDollarSign,
+            label: "Cartera sin vencer",
+            value: ars(carteraSinVencer.nominal),
+            detail: `${carteraSinVencer.cheques} cheque(s) vigentes`,
+            icon: WalletCards,
           },
           {
             label: "Neto estimado",
             value: ars(summary.neto),
+            detail: `${operations.length} operacion(es) cargadas`,
             icon: Building2,
+          },
+          {
+            label: "Nominal operado",
+            value: ars(summary.nominal),
+            detail: `${carteraSinVencer.operaciones} operacion(es) con cartera vigente`,
+            icon: CircleDollarSign,
           },
           {
             label: "Cheques cargados",
             value: String(summary.cheques),
+            detail: "Historial total",
             icon: ReceiptText,
           },
-        ].map(({ icon: Icon, label, value }) => (
+        ].map(({ icon: Icon, label, value, detail }) => (
           <Card key={label}>
             <CardContent className="flex items-center gap-4 pt-6">
               <div className="rounded-2xl bg-amber-100 p-3 text-amber-700">
@@ -138,6 +185,7 @@ export default function OperacionesChequesPage() {
               <div>
                 <p className="text-sm text-slate-500">{label}</p>
                 <p className="text-2xl font-semibold text-slate-900">{value}</p>
+                <p className="text-xs text-slate-400">{detail}</p>
               </div>
             </CardContent>
           </Card>
