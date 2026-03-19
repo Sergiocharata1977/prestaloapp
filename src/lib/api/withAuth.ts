@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { DecodedIdToken } from "firebase-admin/auth";
+import { cookies, headers } from "next/headers";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -37,10 +38,7 @@ export type WithAuthOptions = {
   roles?: string[];
 };
 
-function getBearerToken(request: NextRequest): string | null {
-  const authHeader =
-    request.headers.get("authorization") ?? request.headers.get("Authorization");
-
+function getBearerTokenFromHeader(authHeader: string | null): string | null {
   if (!authHeader?.startsWith("Bearer ")) {
     return null;
   }
@@ -49,9 +47,18 @@ function getBearerToken(request: NextRequest): string | null {
   return token.length > 0 ? token : null;
 }
 
-async function decodeRequestToken(request: NextRequest): Promise<DecodedToken> {
-  const bearerToken = getBearerToken(request);
-  const sessionCookie = request.cookies.get("session")?.value ?? null;
+function getBearerToken(request: NextRequest): string | null {
+  return getBearerTokenFromHeader(
+    request.headers.get("authorization") ?? request.headers.get("Authorization")
+  );
+}
+
+async function decodeAuthToken(input: {
+  bearerToken?: string | null;
+  sessionCookie?: string | null;
+}): Promise<DecodedToken> {
+  const bearerToken = input.bearerToken ?? null;
+  const sessionCookie = input.sessionCookie ?? null;
 
   if (!bearerToken && !sessionCookie) {
     throw new Error("Missing auth token");
@@ -64,7 +71,14 @@ async function decodeRequestToken(request: NextRequest): Promise<DecodedToken> {
   return (await adminAuth.verifySessionCookie(sessionCookie as string, true)) as DecodedToken;
 }
 
-function hasRequiredRole(decodedToken: DecodedToken, roles: string[]): boolean {
+async function decodeRequestToken(request: NextRequest): Promise<DecodedToken> {
+  return decodeAuthToken({
+    bearerToken: getBearerToken(request),
+    sessionCookie: request.cookies.get("session")?.value ?? null,
+  });
+}
+
+export function hasRequiredRole(decodedToken: DecodedToken, roles: string[]): boolean {
   const currentRole =
     typeof decodedToken.role === "string" ? decodedToken.role : null;
 
@@ -73,6 +87,44 @@ function hasRequiredRole(decodedToken: DecodedToken, roles: string[]): boolean {
   }
 
   return roles.includes(currentRole);
+}
+
+export async function requireServerAuthContext(
+  options: WithAuthOptions = {}
+): Promise<AuthContext> {
+  const cookieStore = await cookies();
+  const headerStore = await headers();
+
+  const decodedToken = await decodeAuthToken({
+    bearerToken: getBearerTokenFromHeader(
+      headerStore.get("authorization") ?? headerStore.get("Authorization")
+    ),
+    sessionCookie: cookieStore.get("session")?.value ?? null,
+  });
+
+  if (options.roles && options.roles.length > 0) {
+    const roleAllowed = hasRequiredRole(decodedToken, options.roles);
+    if (!roleAllowed) {
+      throw new Error("Forbidden");
+    }
+  }
+
+  const headerOrgId = headerStore.get("x-org-id")?.trim() ?? null;
+  const organizationId =
+    typeof decodedToken.organizationId === "string" && decodedToken.organizationId
+      ? decodedToken.organizationId
+      : decodedToken.admin === true
+        ? headerOrgId
+        : null;
+
+  if (!organizationId && decodedToken.admin !== true) {
+    throw new Error("No authorized organization could be resolved");
+  }
+
+  return {
+    user: decodedToken,
+    organizationId,
+  };
 }
 
 export function withAuth<

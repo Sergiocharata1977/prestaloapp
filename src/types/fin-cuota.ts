@@ -14,6 +14,7 @@ export interface FinCuota {
   saldo_capital_inicio: number;
   saldo_capital_fin: number;
   estado: FinCuotaEstado;
+  mora_calculada?: number;
   cobro_id?: string;
   fecha_pago?: string;
   created_at: string;

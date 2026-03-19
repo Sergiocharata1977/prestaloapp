@@ -3,6 +3,7 @@ import { CreditoService } from '@/services/CreditoService';
 import type {
   FinCreditoCreateInput,
   FinCreditoEstado,
+  FinCreditoTipoOperacion,
   FinSistemaAmortizacion,
 } from '@/types/fin-credito';
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,6 +20,11 @@ const creditoEstadoSchema = z.enum([
 const creditoCreateSchema = z.object({
   sucursal_id: z.string().trim().min(1, 'sucursal_id requerido'),
   cliente_id: z.string().trim().min(1, 'cliente_id requerido'),
+  tipo_cliente_id: z.string().trim().min(1).optional(),
+  tipo_operacion: z
+    .enum(['consumo', 'empresa', 'cheque_propio', 'cheque_terceros'])
+    .optional(),
+  politica_crediticia_id: z.string().trim().min(1).optional(),
   plan_financiacion_id: z.string().trim().min(1).optional(),
   articulo_descripcion: z.string().trim().min(1, 'articulo_descripcion requerido'),
   articulo_codigo: z.string().trim().min(1).optional(),
@@ -80,6 +86,12 @@ function parseSistema(value: string): FinSistemaAmortizacion {
   return value as FinSistemaAmortizacion;
 }
 
+function parseTipoOperacion(
+  value: string | undefined
+): FinCreditoTipoOperacion | undefined {
+  return value as FinCreditoTipoOperacion | undefined;
+}
+
 export const GET = withAuth(async (request: NextRequest, _context, auth) => {
   try {
     if (!auth.organizationId) {
@@ -121,6 +133,7 @@ export const POST = withAuth(async (request: NextRequest, _context, auth) => {
     const payload: FinCreditoCreateInput = {
       ...body,
       sistema: parseSistema(body.sistema),
+      tipo_operacion: parseTipoOperacion(body.tipo_operacion),
     };
 
     const result = await CreditoService.crear(

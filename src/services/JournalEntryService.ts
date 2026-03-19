@@ -3,6 +3,7 @@ import { FIN_COLLECTIONS } from '@/firebase/collections';
 import type { FinAsiento, FinAsientoLinea } from '@/types/fin-asiento';
 import type { FinCobro } from '@/types/fin-cobro';
 import type { FinCredito } from '@/types/fin-credito';
+import type { FinOperacionCheque } from '@/types/fin-operacion-cheque';
 import type { FinConfigCuentas, FinCuenta } from '@/types/fin-plan-cuentas';
 
 type CuentaContable = Pick<FinCuenta, 'id' | 'codigo' | 'nombre'>;
@@ -184,6 +185,93 @@ export class JournalEntryService {
       documento_id: cobro.id,
       documento_tipo: 'cobro',
       fecha: cobro.fecha_cobro,
+      lineas,
+      usuarioId,
+      usuarioNombre,
+    });
+
+    if (options.transaction) {
+      options.transaction.set(asientoRef, asiento);
+    } else {
+      await asientoRef.set(asiento);
+    }
+
+    return asiento.id;
+  }
+
+  static async generarAsientoLiquidacionOperacionCheque(
+    operacion: FinOperacionCheque,
+    usuarioId: string,
+    usuarioNombre: string,
+    options: {
+      transaction?: FirebaseFirestore.Transaction;
+      asientoId?: string;
+    } = {}
+  ): Promise<string> {
+    if (!operacion.base_contable || !operacion.resumen) {
+      throw new Error('Operacion de cheque incompleta para generar asiento');
+    }
+
+    const { base_contable, resumen } = operacion;
+    const [cuentaCheques, cuentaLiquidadora, cuentaIngresos] = await Promise.all([
+      this.getCuenta(
+        operacion.organization_id,
+        base_contable.cuenta_cheques_id,
+        options
+      ),
+      this.getCuenta(
+        operacion.organization_id,
+        base_contable.cuenta_liquidadora_id,
+        options
+      ),
+      this.getCuenta(
+        operacion.organization_id,
+        base_contable.cuenta_ingresos_id,
+        options
+      ),
+    ]);
+
+    const lineas: FinAsientoLinea[] = [
+      buildLinea(
+        cuentaCheques,
+        `Liquidacion operacion ${operacion.numero_operacion} - ingreso de cheques`,
+        resumen.importe_bruto,
+        0
+      ),
+      buildLinea(
+        cuentaLiquidadora,
+        `Liquidacion operacion ${operacion.numero_operacion} - egreso neto`,
+        0,
+        resumen.importe_neto
+      ),
+    ];
+
+    if (resumen.gastos > 0) {
+      lineas.push(
+        buildLinea(
+          cuentaIngresos,
+          `Liquidacion operacion ${operacion.numero_operacion} - gastos e ingresos`,
+          0,
+          resumen.gastos
+        )
+      );
+    }
+
+    this.validarBalance(lineas);
+    const db = getAdminFirestore();
+    const asientoId =
+      options.asientoId ??
+      db.collection(FIN_COLLECTIONS.asientos(operacion.organization_id)).doc().id;
+    const asientoRef = db.doc(FIN_COLLECTIONS.asiento(operacion.organization_id, asientoId));
+
+    const asiento = this.buildAsiento({
+      id: asientoId,
+      organization_id: operacion.organization_id,
+      sucursal_id: operacion.sucursal_id,
+      origen: 'descuento_cheque_liquidado',
+      documento_id: operacion.id,
+      documento_tipo: 'operacion_cheque',
+      fecha: operacion.fecha_liquidacion,
       lineas,
       usuarioId,
       usuarioNombre,

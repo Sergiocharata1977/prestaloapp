@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, LayoutGrid, List } from "lucide-react";
+import { LayoutGrid, List, Plus } from "lucide-react";
 import type { FinCredito } from "@/types/fin-credito";
-import { apiFetch } from "@/lib/apiFetch";
+import { NuevoCreditoDialog } from "@/components/fin/dialogs/NuevoCreditoDialog";
+import { StatusBadge } from "@/components/fin/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { StatusBadge } from "@/components/fin/StatusBadge";
+import { apiFetch } from "@/lib/apiFetch";
 import {
   Select,
   SelectContent,
@@ -15,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { NuevoCreditoDialog } from "@/components/fin/dialogs/NuevoCreditoDialog";
 
 function ars(n: number) {
   return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
@@ -23,7 +23,7 @@ function ars(n: number) {
 
 const columns: Column<FinCredito>[] = [
   { key: "numero_credito", header: "Nro", width: "90px" },
-  { key: "articulo_descripcion", header: "Artículo", className: "text-sm" },
+  { key: "articulo_descripcion", header: "Articulo", className: "text-sm" },
   {
     key: "capital",
     header: "Capital",
@@ -33,7 +33,7 @@ const columns: Column<FinCredito>[] = [
   {
     key: "sistema",
     header: "Sistema",
-    render: (r) => (r.sistema === "frances" ? "Francés" : "Alemán"),
+    render: (r) => (r.sistema === "frances" ? "Frances" : "Aleman"),
   },
   {
     key: "cantidad_cuotas",
@@ -66,30 +66,40 @@ export default function CreditosPage() {
 
   const fetchCreditos = (filtroEstado: string) => {
     setLoading(true);
-    const url = filtroEstado !== "todos" ? `/api/fin/creditos?estado=${filtroEstado}` : "/api/fin/creditos";
+    const url =
+      filtroEstado !== "todos"
+        ? `/api/fin/creditos?estado=${filtroEstado}`
+        : "/api/fin/creditos";
     apiFetch(url)
       .then((r) => r.json())
       .then((d) => setCreditos((d as { creditos: FinCredito[] }).creditos ?? []))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchCreditos(estado); }, [estado]);
+  useEffect(() => {
+    fetchCreditos(estado);
+  }, [estado]);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Créditos</h2>
-          <p className="text-sm text-slate-500">Cartera de créditos al consumo</p>
+          <h2 className="text-2xl font-semibold text-slate-900">Creditos</h2>
+          <p className="text-sm text-slate-500">
+            Cartera con otorgamiento rapido y flujo bajo politica para personas y empresas
+          </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Nuevo crédito
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push("/creditos/nuevo")}>
+            Nuevo bajo politica
+          </Button>
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Nuevo rapido
+          </Button>
+        </div>
       </div>
 
-      {/* Filters + view toggle */}
       <div className="flex items-center gap-3">
         <Select value={estado} onValueChange={setEstado}>
           <SelectTrigger className="w-40">
@@ -104,17 +114,25 @@ export default function CreditosPage() {
           </SelectContent>
         </Select>
 
-        <div className="flex rounded-lg border border-slate-200 bg-white p-1 gap-1">
+        <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
           <button
             onClick={() => setView("lista")}
-            className={`rounded p-1.5 transition-colors ${view === "lista" ? "bg-slate-100 text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
+            className={`rounded p-1.5 transition-colors ${
+              view === "lista"
+                ? "bg-slate-100 text-slate-900"
+                : "text-slate-400 hover:text-slate-600"
+            }`}
             title="Vista lista"
           >
             <List className="h-4 w-4" />
           </button>
           <button
             onClick={() => setView("tarjetas")}
-            className={`rounded p-1.5 transition-colors ${view === "tarjetas" ? "bg-slate-100 text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
+            className={`rounded p-1.5 transition-colors ${
+              view === "tarjetas"
+                ? "bg-slate-100 text-slate-900"
+                : "text-slate-400 hover:text-slate-600"
+            }`}
             title="Vista tarjetas"
           >
             <LayoutGrid className="h-4 w-4" />
@@ -122,27 +140,27 @@ export default function CreditosPage() {
         </div>
       </div>
 
-      {/* Vista lista */}
       {view === "lista" && (
         <DataTable
           columns={columns}
           data={creditos}
           loading={loading}
-          emptyMessage="No hay créditos para el filtro seleccionado."
+          emptyMessage="No hay creditos para el filtro seleccionado."
           onRowClick={(row) => router.push(`/creditos/${row.id}`)}
         />
       )}
 
-      {/* Vista tarjetas */}
-      {view === "tarjetas" && (
-        loading ? (
+      {view === "tarjetas" &&
+        (loading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-44 animate-pulse rounded-2xl bg-slate-200" />
             ))}
           </div>
         ) : creditos.length === 0 ? (
-          <p className="py-12 text-center text-sm text-slate-400">No hay créditos para el filtro seleccionado.</p>
+          <p className="py-12 text-center text-sm text-slate-400">
+            No hay creditos para el filtro seleccionado.
+          </p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {creditos.map((cr) => (
@@ -164,19 +182,27 @@ export default function CreditosPage() {
                 <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <p className="text-slate-400">Capital</p>
-                    <p className="font-mono font-semibold text-slate-900">{ars(cr.capital)}</p>
+                    <p className="font-mono font-semibold text-slate-900">
+                      {ars(cr.capital)}
+                    </p>
                   </div>
                   <div>
                     <p className="text-slate-400">Saldo</p>
-                    <p className="font-mono font-semibold text-slate-900">{ars(cr.saldo_capital)}</p>
+                    <p className="font-mono font-semibold text-slate-900">
+                      {ars(cr.saldo_capital)}
+                    </p>
                   </div>
                   <div>
                     <p className="text-slate-400">Sistema</p>
-                    <p className="text-slate-700">{cr.sistema === "frances" ? "Francés" : "Alemán"}</p>
+                    <p className="text-slate-700">
+                      {cr.sistema === "frances" ? "Frances" : "Aleman"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-slate-400">Cuotas</p>
-                    <p className="text-slate-700">{cr.cuotas_pagas}/{cr.cantidad_cuotas}</p>
+                    <p className="text-slate-700">
+                      {cr.cuotas_pagas}/{cr.cantidad_cuotas}
+                    </p>
                   </div>
                 </div>
 
@@ -184,8 +210,7 @@ export default function CreditosPage() {
               </button>
             ))}
           </div>
-        )
-      )}
+        ))}
 
       <NuevoCreditoDialog
         open={dialogOpen}

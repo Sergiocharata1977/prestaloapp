@@ -1,4 +1,8 @@
-export type FinAsientoOrigen = 'credito_otorgado' | 'cobro_cuota' | 'ajuste_manual';
+export type FinAsientoOrigen =
+  | 'credito_otorgado'
+  | 'cobro_cuota'
+  | 'descuento_cheque_liquidado'
+  | 'ajuste_manual';
 
 export interface FinAsientoLinea {
   cuenta_id: string;

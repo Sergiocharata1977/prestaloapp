@@ -1,6 +1,36 @@
 import type { EvaluacionTier } from '@/types/fin-evaluacion';
 
 export type FinClienteTipo = 'fisica' | 'juridica';
+export type FinClienteLegajoEstado = 'completo' | 'incompleto';
+export type FinClienteLegajoDocumentoEstado = 'pendiente' | 'cargado' | 'observado';
+
+export interface FinClienteLegajoChecklistItem {
+  id: string;
+  clave: string;
+  label: string;
+  obligatorio: boolean;
+  completo: boolean;
+  observaciones?: string;
+  updated_at?: string;
+}
+
+export interface FinClienteLegajoDocumento {
+  id: string;
+  nombre: string;
+  categoria: string;
+  estado: FinClienteLegajoDocumentoEstado;
+  archivo_nombre?: string;
+  observaciones?: string;
+  updated_at?: string;
+}
+
+export interface FinClienteLegajo {
+  estado: FinClienteLegajoEstado;
+  checklist: FinClienteLegajoChecklistItem[];
+  documentos: FinClienteLegajoDocumento[];
+  notas?: string;
+  updated_at?: string;
+}
 
 export interface FinClienteNosisUltimo {
   fecha: string;
@@ -69,6 +99,7 @@ export interface FinCliente {
   evaluacion_id_ultima?: string;
   evaluacion_vigente_hasta?: string;
   nosis_ultimo?: FinClienteNosisUltimo;
+  legajo?: FinClienteLegajo;
   creditos_activos_count: number;
   saldo_total_adeudado: number;
   created_at: string;

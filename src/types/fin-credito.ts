@@ -65,8 +65,8 @@ export interface FinCredito {
   limite_credito_asignado?: number;
   capital: number;
   tasa_mensual: number;
-  snapshot_tasa_mensual_pct?: number;
-  snapshot_tasa_punitoria_mensual?: number;
+  snapshot_tasa_mensual: number;
+  snapshot_tasa_punitoria_mensual: number;
   snapshot_cargo_fijo?: number;
   snapshot_cargo_variable_pct?: number;
   cantidad_cuotas: number;

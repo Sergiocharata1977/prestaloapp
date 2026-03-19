@@ -1,11 +1,15 @@
 import { FIN_COLLECTIONS } from '@/firebase/collections';
 import { getAdminFirestore } from '@/firebase/admin';
 import { AmortizationService } from '@/services/AmortizationService';
+import { LineaCreditoService } from '@/services/LineaCreditoService';
 import { PlanFinanciacionService } from '@/services/PlanFinanciacionService';
 import type { FinAsiento, FinAsientoLinea } from '@/types/fin-asiento';
+import type { FinCliente } from '@/types/fin-cliente';
 import type { FinConfigCuentas, FinCuenta } from '@/types/fin-plan-cuentas';
 import type { FinCredito, FinCreditoCreateInput, FinCreditoEstado } from '@/types/fin-credito';
 import type { FinCuota, FinCuotaEstado } from '@/types/fin-cuota';
+import type { FinEvaluacion } from '@/types/fin-evaluacion';
+import type { FinLineaCredito } from '@/types/fin-linea-credito';
 import type { FinPlanFinanciacion } from '@/types/fin-plan-financiacion';
 import type { FinPoliticaCrediticia } from '@/types/fin-politica-crediticia';
 import type { FinTipoCliente } from '@/types/fin-tipo-cliente';
@@ -27,6 +31,170 @@ function nowIso(): string {
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function startOfDayUtc(date: Date): number {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+function diferenciaDias(desde: Date, hasta: Date): number {
+  return Math.floor((startOfDayUtc(hasta) - startOfDayUtc(desde)) / 86400000);
+}
+
+function minNumber(values: Array<number | null | undefined>): number | null {
+  const normalized = values.filter((value): value is number => typeof value === 'number');
+  return normalized.length > 0 ? Math.min(...normalized) : null;
+}
+
+function resolvePeriodoOtorgamiento(fechaOtorgamiento: string): string {
+  return fechaOtorgamiento.slice(0, 7);
+}
+
+function resolveConsumoMensual(
+  creditos: FinCredito[],
+  periodo: string
+): number {
+  return round2(
+    creditos
+      .filter(credito => credito.fecha_otorgamiento.slice(0, 7) === periodo)
+      .reduce((acc, credito) => acc + Number(credito.capital || 0), 0)
+  );
+}
+
+function resolvePoliticaTier(
+  politica: FinPoliticaCrediticia | undefined,
+  evaluacion: FinEvaluacion | null
+) {
+  if (!politica || !evaluacion) {
+    return undefined;
+  }
+
+  const tier = evaluacion.tier_asignado ?? evaluacion.tier;
+  return politica.tiers.find(item => item.tier === tier);
+}
+
+function isLegajoCompleto(cliente: FinCliente): boolean {
+  return cliente.legajo?.estado === 'completo';
+}
+
+function isEvaluacionClienteVigente(
+  cliente: FinCliente,
+  evaluacion: FinEvaluacion | null,
+  fechaControl: string
+): boolean {
+  if (!evaluacion || !evaluacion.es_vigente || evaluacion.estado !== 'aprobada') {
+    return false;
+  }
+
+  if (!cliente.evaluacion_vigente_hasta) {
+    return true;
+  }
+
+  return cliente.evaluacion_vigente_hasta >= fechaControl;
+}
+
+function mapCliente(
+  doc: FirebaseFirestore.DocumentSnapshot
+): FinCliente | null {
+  if (!doc.exists) {
+    return null;
+  }
+
+  return {
+    id: doc.id,
+    ...doc.data(),
+  } as FinCliente;
+}
+
+function mapEvaluacion(
+  doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot
+): FinEvaluacion | null {
+  if (!doc.exists) {
+    return null;
+  }
+
+  return {
+    id: doc.id,
+    ...doc.data(),
+  } as FinEvaluacion;
+}
+
+function resolveLineaCredito(params: {
+  cliente: FinCliente;
+  creditosActivos: FinCredito[];
+  evaluacion: FinEvaluacion | null;
+  politica?: FinPoliticaCrediticia;
+  fechaOtorgamiento: string;
+}): FinLineaCredito {
+  const politicaTier = resolvePoliticaTier(params.politica, params.evaluacion);
+  const limitePoliticaTotal =
+    politicaTier?.limite_total ?? params.politica?.limite_total ?? null;
+  const limitePoliticaMensual =
+    politicaTier?.limite_mensual ?? params.politica?.limite_mensual ?? null;
+  const limiteClienteTotal =
+    params.cliente.limite_credito_vigente ??
+    params.cliente.limite_credito_asignado ??
+    params.evaluacion?.limite_credito_asignado ??
+    params.evaluacion?.limite_credito_sugerido ??
+    null;
+
+  const consumoActual = LineaCreditoService.calcularConsumoActual(
+    params.creditosActivos
+  );
+  const consumoMensualActual = resolveConsumoMensual(
+    params.creditosActivos,
+    resolvePeriodoOtorgamiento(params.fechaOtorgamiento)
+  );
+
+  const disponible = LineaCreditoService.calcularDisponibleActual({
+    limite_total: minNumber([limiteClienteTotal, limitePoliticaTotal]),
+    limite_mensual: limitePoliticaMensual,
+    consumo_actual: consumoActual,
+    consumo_mensual_actual: consumoMensualActual,
+  });
+
+  return {
+    id: `${params.cliente.id}-linea-credito`,
+    organization_id: params.cliente.organization_id,
+    cliente_id: params.cliente.id,
+    limite_total: minNumber([limiteClienteTotal, limitePoliticaTotal]),
+    limite_mensual: limitePoliticaMensual,
+    consumo_actual: consumoActual,
+    consumo_mensual_actual: consumoMensualActual,
+    disponible_actual: disponible.disponible_actual,
+    disponible_total_actual: disponible.disponible_total_actual,
+    disponible_mensual_actual: disponible.disponible_mensual_actual,
+    vigencia: {
+      desde: params.evaluacion?.fecha ?? params.cliente.created_at,
+      hasta: params.cliente.evaluacion_vigente_hasta,
+      vigente: isEvaluacionClienteVigente(
+        params.cliente,
+        params.evaluacion,
+        params.fechaOtorgamiento
+      ),
+      estado: params.evaluacion
+        ? isEvaluacionClienteVigente(
+            params.cliente,
+            params.evaluacion,
+            params.fechaOtorgamiento
+          )
+          ? 'vigente'
+          : 'vencida'
+        : 'sin_evaluacion',
+    },
+    evaluacion_vigente: params.evaluacion
+      ? {
+          id: params.evaluacion.id,
+          fecha: params.evaluacion.fecha,
+          estado: params.evaluacion.estado,
+          tier: params.evaluacion.tier,
+          tier_asignado: params.evaluacion.tier_asignado,
+          limite_credito_asignado: params.evaluacion.limite_credito_asignado,
+        }
+      : null,
+    created_at: params.cliente.created_at,
+    updated_at: params.cliente.updated_at,
+  };
 }
 
 function mapCredito(
@@ -301,6 +469,97 @@ export class CreditoService {
     };
   }
 
+  static calcularMora(
+    credito: FinCredito,
+    cuota: FinCuota,
+    fechaCalculo: Date
+  ): number {
+    const diasVencidos = Math.max(
+      0,
+      diferenciaDias(new Date(cuota.fecha_vencimiento), fechaCalculo)
+    );
+
+    if (diasVencidos === 0) {
+      return 0;
+    }
+
+    const tasaDiaria = credito.snapshot_tasa_punitoria_mensual / 100 / 30;
+    return round2(cuota.total * tasaDiaria * diasVencidos);
+  }
+
+  static async validarOtorgamiento(
+    orgId: string,
+    input: FinCreditoCreateInput
+  ): Promise<{
+    linea: FinLineaCredito;
+    cliente: FinCliente;
+    evaluacion: FinEvaluacion | null;
+    tasaData: Awaited<ReturnType<typeof CreditoService.resolveTasaInput>>;
+  }> {
+    const db = getAdminFirestore();
+    const tasaData = await this.resolveTasaInput(orgId, input);
+    const [clienteSnap, evaluacionSnap, creditosSnap] = await Promise.all([
+      db.doc(FIN_COLLECTIONS.cliente(orgId, input.cliente_id)).get(),
+      db
+        .collection(FIN_COLLECTIONS.evaluaciones(orgId))
+        .where('cliente_id', '==', input.cliente_id)
+        .where('es_vigente', '==', true)
+        .limit(1)
+        .get(),
+      db
+        .collection(FIN_COLLECTIONS.creditos(orgId))
+        .where('cliente_id', '==', input.cliente_id)
+        .get(),
+    ]);
+
+    const cliente = mapCliente(clienteSnap);
+    if (!cliente) {
+      throw new Error('Cliente no encontrado');
+    }
+
+    const evaluacion =
+      evaluacionSnap.docs
+        .map(doc => mapEvaluacion(doc))
+        .find((item): item is FinEvaluacion => Boolean(item)) ?? null;
+
+    const creditosActivos = creditosSnap.docs
+      .map(doc => mapCredito(doc))
+      .filter((credito): credito is FinCredito => Boolean(credito))
+      .filter(credito =>
+        ['activo', 'en_mora', 'refinanciado'].includes(credito.estado)
+      );
+
+    const linea = resolveLineaCredito({
+      cliente,
+      creditosActivos,
+      evaluacion,
+      politica: tasaData.politica,
+      fechaOtorgamiento: input.fecha_otorgamiento,
+    });
+
+    if (linea.disponible_actual <= 0 || input.capital > linea.disponible_actual) {
+      throw new Error('No hay linea disponible suficiente para otorgar el credito');
+    }
+
+    if (
+      tasaData.politica?.requiere_evaluacion_vigente &&
+      !isEvaluacionClienteVigente(cliente, evaluacion, input.fecha_otorgamiento)
+    ) {
+      throw new Error('La politica requiere una evaluacion vigente');
+    }
+
+    if (tasaData.politica?.requiere_legajo && !isLegajoCompleto(cliente)) {
+      throw new Error('La politica requiere legajo completo');
+    }
+
+    return {
+      linea,
+      cliente,
+      evaluacion,
+      tasaData,
+    };
+  }
+
   static async crear(
     orgId: string,
     input: FinCreditoCreateInput,
@@ -312,7 +571,8 @@ export class CreditoService {
     tabla_amortizacion: ReturnType<typeof AmortizationService.calcular>;
   }> {
     const db = getAdminFirestore();
-    const tasaData = await this.resolveTasaInput(orgId, input);
+    const validacion = await this.validarOtorgamiento(orgId, input);
+    const { linea, evaluacion, tasaData } = validacion;
     const tablaAmortizacion = AmortizationService.calcular(
       input.capital,
       tasaData.tasaMensual / 100,
@@ -349,6 +609,68 @@ export class CreditoService {
 
       if (!clienteSnap.exists) {
         throw new Error('Cliente no encontrado');
+      }
+
+      const clienteActual = mapCliente(clienteSnap);
+      if (!clienteActual) {
+        throw new Error('Cliente no encontrado');
+      }
+
+      const [evaluacionTxSnap, creditosClienteTxSnap] = await Promise.all([
+        transaction.get(
+          db
+            .collection(FIN_COLLECTIONS.evaluaciones(orgId))
+            .where('cliente_id', '==', input.cliente_id)
+            .where('es_vigente', '==', true)
+            .limit(1)
+        ),
+        transaction.get(
+          db
+            .collection(FIN_COLLECTIONS.creditos(orgId))
+            .where('cliente_id', '==', input.cliente_id)
+        ),
+      ]);
+
+      const evaluacionActual =
+        evaluacionTxSnap.docs
+          .map(doc => mapEvaluacion(doc))
+          .find((item): item is FinEvaluacion => Boolean(item)) ?? evaluacion;
+
+      const creditosClienteActivos = creditosClienteTxSnap.docs
+        .map(doc => mapCredito(doc))
+        .filter((credito): credito is FinCredito => Boolean(credito))
+        .filter(credito =>
+          ['activo', 'en_mora', 'refinanciado'].includes(credito.estado)
+        );
+
+      const lineaActual = resolveLineaCredito({
+        cliente: clienteActual,
+        creditosActivos: creditosClienteActivos,
+        evaluacion: evaluacionActual,
+        politica: tasaData.politica,
+        fechaOtorgamiento: input.fecha_otorgamiento,
+      });
+
+      if (
+        lineaActual.disponible_actual <= 0 ||
+        input.capital > lineaActual.disponible_actual
+      ) {
+        throw new Error('No hay linea disponible suficiente para otorgar el credito');
+      }
+
+      if (
+        tasaData.politica?.requiere_evaluacion_vigente &&
+        !isEvaluacionClienteVigente(
+          clienteActual,
+          evaluacionActual,
+          input.fecha_otorgamiento
+        )
+      ) {
+        throw new Error('La politica requiere una evaluacion vigente');
+      }
+
+      if (tasaData.politica?.requiere_legajo && !isLegajoCompleto(clienteActual)) {
+        throw new Error('La politica requiere legajo completo');
       }
 
       const config = normalizeConfig(orgId, configSnap.data());
@@ -442,12 +764,25 @@ export class CreditoService {
                 cargo_variable_pct: tasaData.plan.cargo_variable_pct,
               }
             : undefined),
+        tier_sugerido:
+          input.tier_sugerido ?? evaluacionActual?.tier_sugerido ?? evaluacion?.tier_sugerido,
+        tier_asignado:
+          input.tier_asignado ?? evaluacionActual?.tier_asignado ?? evaluacion?.tier_asignado,
+        limite_credito_asignado:
+          input.limite_credito_asignado ??
+          evaluacionActual?.limite_credito_asignado ??
+          evaluacion?.limite_credito_asignado ??
+          lineaActual.limite_total ??
+          linea.limite_total ??
+          undefined,
         capital: round2(input.capital),
         tasa_mensual: tasaData.tasaMensual,
         cantidad_cuotas: input.cantidad_cuotas,
-        snapshot_tasa_mensual_pct: tasaData.tasaMensual,
+        snapshot_tasa_mensual: tasaData.tasaMensual,
         snapshot_tasa_punitoria_mensual:
-          tasaData.plan?.tasa_punitoria_mensual ?? input.plan_snapshot?.tasa_punitoria_mensual,
+          tasaData.plan?.tasa_punitoria_mensual ??
+          input.plan_snapshot?.tasa_punitoria_mensual ??
+          0,
         snapshot_cargo_fijo:
           tasaData.plan?.cargo_fijo ?? input.plan_snapshot?.cargo_fijo,
         snapshot_cargo_variable_pct:

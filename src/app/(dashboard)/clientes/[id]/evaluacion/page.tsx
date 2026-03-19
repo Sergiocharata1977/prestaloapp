@@ -1,650 +1,319 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
-  ClipboardCheck,
-  History,
-  ShieldCheck,
-} from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, Save } from "lucide-react";
 import { apiFetch } from "@/lib/apiFetch";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SCORING_ITEMS_CATALOG, calcularScore } from "@/lib/scoring/utils";
-import type { FinCliente, FinClienteNosisConsulta } from "@/types/fin-cliente";
-import type {
-  EvaluacionTier,
-  FinEvaluacion,
-  FinEvaluacionUpsertResult,
-  ScoringItem,
-} from "@/types/fin-evaluacion";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import type { ScoringCategoria } from "@/types/fin-evaluacion";
 
-const TIER_STYLES: Record<EvaluacionTier, string> = {
-  A: "bg-green-100 text-green-800 border-green-200",
-  B: "bg-blue-100 text-blue-800 border-blue-200",
-  C: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  reprobado: "bg-red-100 text-red-800 border-red-200",
+type CatalogItem = { id: string; categoria: ScoringCategoria; nombre: string };
+
+const CATALOG: CatalogItem[] = [
+  { id: "gestion_empresa",       categoria: "cualitativo",  nombre: "Gestion general de la empresa" },
+  { id: "condiciones_mercado",   categoria: "cualitativo",  nombre: "Condiciones del mercado/sector" },
+  { id: "organizacion_interna",  categoria: "cualitativo",  nombre: "Organizacion interna" },
+  { id: "situacion_cheques",     categoria: "cualitativo",  nombre: "Situacion de cheques" },
+  { id: "terminos_pago",         categoria: "cualitativo",  nombre: "Terminos de pago con proveedores" },
+  { id: "crecimiento_ventas",    categoria: "cualitativo",  nombre: "Crecimiento de ventas" },
+  { id: "fidelizacion",          categoria: "cualitativo",  nombre: "Historia y fidelizacion" },
+  { id: "concursos_quiebras",    categoria: "conflictos",   nombre: "Concursos o quiebras pasadas" },
+  { id: "situacion_fiscal",      categoria: "conflictos",   nombre: "Situacion fiscal/impositiva" },
+  { id: "cheques_rechazados",    categoria: "conflictos",   nombre: "Cheques rechazados en el sistema" },
+  { id: "situacion_economica",   categoria: "cuantitativo", nombre: "Situacion economica general" },
+  { id: "situacion_financiera",  categoria: "cuantitativo", nombre: "Ratios financieros" },
+  { id: "volumenes_negocio",     categoria: "cuantitativo", nombre: "Volumenes de negocio" },
+  { id: "situacion_patrimonial", categoria: "cuantitativo", nombre: "Patrimonio neto y garantias" },
+];
+
+const PESOS: Record<ScoringCategoria, number> = { cualitativo: 0.43, conflictos: 0.31, cuantitativo: 0.26 };
+
+const TIERS = [
+  { min: 8, label: "Tier A",    color: "bg-green-100 text-green-800 border-green-200" },
+  { min: 6, label: "Tier B",    color: "bg-blue-100 text-blue-800 border-blue-200" },
+  { min: 4, label: "Tier C",    color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+  { min: 0, label: "Reprobado", color: "bg-red-100 text-red-800 border-red-200" },
+];
+
+const CATEGORIA_LABELS: Record<ScoringCategoria, string> = {
+  cualitativo:  "Factores cualitativos (43%)",
+  conflictos:   "Conflictos e historial (31%)",
+  cuantitativo: "Factores cuantitativos (26%)",
 };
 
-const TIER_LABELS: Record<EvaluacionTier, string> = {
-  A: "Tier A",
-  B: "Tier B",
-  C: "Tier C",
-  reprobado: "Reprobado",
-};
+type ItemScore = { puntaje: number | null; nota: string };
+type ScoreMap  = Record<string, ItemScore>;
 
-type PuntajeMap = Record<string, string>;
-
-function round2(n: number): string {
-  return n.toFixed(2);
+function calcScore(s: ScoreMap) {
+  const by: Record<ScoringCategoria, number[]> = { cualitativo: [], conflictos: [], cuantitativo: [] };
+  let completo = true;
+  for (const item of CATALOG) {
+    const p = s[item.id]?.puntaje;
+    if (p === null || p === undefined) { completo = false; continue; }
+    by[item.categoria].push(p);
+  }
+  const avg = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const cualitativo  = avg(by.cualitativo);
+  const conflictos   = avg(by.conflictos);
+  const cuantitativo = avg(by.cuantitativo);
+  const final = cualitativo * PESOS.cualitativo + conflictos * PESOS.conflictos + cuantitativo * PESOS.cuantitativo;
+  const tier  = TIERS.find((t) => final >= t.min) ?? TIERS[TIERS.length - 1];
+  return { cualitativo, conflictos, cuantitativo, final, tier, completo };
 }
 
-function ars(value?: number | null): string {
-  if (value === null || value === undefined) return "—";
-  return value.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
-}
+const CATEGORIAS: ScoringCategoria[] = ["cualitativo", "conflictos", "cuantitativo"];
 
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function calculateLimit(tier: EvaluacionTier): number | null {
-  if (tier === "A") return 5_000_000;
-  if (tier === "B") return 2_000_000;
-  if (tier === "C") return 500_000;
-  return null;
-}
-
-function statusBadgeClass(status?: FinEvaluacion["estado"]) {
-  if (status === "aprobada") return "bg-green-100 text-green-800 border-green-200";
-  if (status === "rechazada") return "bg-red-100 text-red-800 border-red-200";
-  return "bg-amber-100 text-amber-800 border-amber-200";
-}
-
-export default function EvaluacionPage() {
+export default function NuevaEvaluacionPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const clienteId = params.id;
 
-  const [cliente, setCliente] = useState<FinCliente | null>(null);
-  const [evaluaciones, setEvaluaciones] = useState<FinEvaluacion[]>([]);
-  const [nosisConsultas, setNosisConsultas] = useState<FinClienteNosisConsulta[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [resultado, setResultado] = useState<FinEvaluacion | null>(null);
-
-  const [puntajes, setPuntajes] = useState<PuntajeMap>(() => {
-    const initial: PuntajeMap = {};
-    for (const item of SCORING_ITEMS_CATALOG) {
-      initial[item.id] = "";
-    }
-    return initial;
+  const [scores, setScores] = useState<ScoreMap>(() => {
+    const init: ScoreMap = {};
+    for (const item of CATALOG) init[item.id] = { puntaje: null, nota: "" };
+    return init;
   });
-  const [notas, setNotas] = useState<Record<string, string>>({});
-  const [nosisConsultado, setNosisConsultado] = useState(false);
+  const [nosisScore,    setNosisScore]    = useState("");
   const [observaciones, setObservaciones] = useState("");
+  const [saving,        setSaving]        = useState(false);
+  const [error,         setError]         = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
-    if (!clienteId) return;
+  const result = calcScore(scores);
 
-    setLoading(true);
-    setError(null);
-    try {
-      const [clienteRes, evaluacionesRes, nosisRes] = await Promise.all([
-        apiFetch(`/api/fin/clientes/${clienteId}`),
-        apiFetch(`/api/fin/clientes/${clienteId}/evaluacion`),
-        apiFetch(`/api/fin/clientes/${clienteId}/nosis`),
-      ]);
+  const setPuntaje = (id: string, val: number | null) =>
+    setScores((prev) => ({ ...prev, [id]: { ...prev[id], puntaje: val } }));
 
-      if (!clienteRes.ok) throw new Error("No se pudo cargar el cliente");
-      if (!evaluacionesRes.ok) throw new Error("No se pudo cargar la evaluación");
-      if (!nosisRes.ok) throw new Error("No se pudo cargar el historial Nosis");
-
-      const clienteData = (await clienteRes.json()) as { cliente: FinCliente };
-      const evaluacionesData = (await evaluacionesRes.json()) as { evaluaciones: FinEvaluacion[] };
-      const nosisData = (await nosisRes.json()) as {
-        data?: {
-          historial?: FinClienteNosisConsulta[];
-        };
-      };
-
-      setCliente(clienteData.cliente);
-      setEvaluaciones(evaluacionesData.evaluaciones ?? []);
-      setNosisConsultas(nosisData.data?.historial ?? []);
-      setNosisConsultado(Boolean(clienteData.cliente.nosis_ultimo));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
-    } finally {
-      setLoading(false);
-    }
-  }, [clienteId]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
-  const preview = useMemo(() => {
-    const items: ScoringItem[] = SCORING_ITEMS_CATALOG.map((cat) => ({
-      ...cat,
-      puntaje: puntajes[cat.id] !== "" ? Number(puntajes[cat.id]) : null,
-      nota: notas[cat.id] || undefined,
-    }));
-    const completeCount = items.filter((item) => item.puntaje !== null).length;
-    if (completeCount === 0) return null;
-    return calcularScore(items);
-  }, [notas, puntajes]);
-
-  const ultimaEvaluacion = evaluaciones[0] ?? null;
-  const evaluacionVigente =
-    evaluaciones.find((evaluacion) => evaluacion.es_vigente) ?? ultimaEvaluacion;
-  const ultimaConsultaNosis = nosisConsultas[0] ?? null;
-
-  const handlePuntaje = (id: string, value: string) => {
-    const num = Number(value);
-    if (value !== "" && (Number.isNaN(num) || num < 1 || num > 10)) return;
-    setPuntajes((prev) => ({ ...prev, [id]: value }));
-  };
+  const setNota = (id: string, nota: string) =>
+    setScores((prev) => ({ ...prev, [id]: { ...prev[id], nota } }));
 
   const handleSubmit = async () => {
-    const incompletos = SCORING_ITEMS_CATALOG.filter((item) => !puntajes[item.id]);
-    if (incompletos.length > 0) {
-      setError(`Faltan puntajes en: ${incompletos.map((item) => item.nombre).join(", ")}`);
-      return;
-    }
-
-    setGuardando(true);
     setError(null);
+    if (!result.completo) { setError("Completar todos los items antes de guardar."); return; }
+    setSaving(true);
     try {
-      const latestNosisScore = cliente?.nosis_ultimo?.score ?? ultimaConsultaNosis?.score ?? null;
-      const latestNosisPayload = ultimaConsultaNosis
-        ? {
-            fecha_consulta: ultimaConsultaNosis.fecha_consulta,
-            score: ultimaConsultaNosis.score,
-            situacion_bcra: ultimaConsultaNosis.situacion_bcra,
-            cheques_rechazados: ultimaConsultaNosis.cheques_rechazados,
-            juicios_activos: ultimaConsultaNosis.juicios_activos,
-            estado: ultimaConsultaNosis.estado,
-            error_mensaje: ultimaConsultaNosis.error_mensaje,
-          }
-        : undefined;
-
-      const body = {
-        items: SCORING_ITEMS_CATALOG.map((item) => ({
-          id: item.id,
-          puntaje: Number(puntajes[item.id]),
-          nota: notas[item.id] || undefined,
-        })),
-        nosis_consultado: nosisConsultado,
-        score_nosis: latestNosisScore,
-        nosis_resultado: latestNosisPayload,
-        observaciones: observaciones || undefined,
-      };
-
+      const items = CATALOG.map((item) => ({
+        id: item.id,
+        puntaje: scores[item.id].puntaje as number,
+        nota: scores[item.id].nota || undefined,
+      }));
+      const nosisNum = nosisScore ? parseFloat(nosisScore) : undefined;
       const res = await apiFetch(`/api/fin/clientes/${clienteId}/evaluacion`, {
         method: "POST",
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          items,
+          nosis_consultado: !!nosisNum,
+          score_nosis: nosisNum ?? null,
+          observaciones: observaciones || undefined,
+        }),
       });
-
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "Error al guardar evaluación");
+        const body = await res.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error ?? "Error al guardar");
       }
-
-      const data = (await res.json()) as FinEvaluacionUpsertResult;
-      setResultado(data.evaluacion);
-      await loadData();
+      router.push(`/clientes/${clienteId}/evaluacion/historial`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      setError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        {[1, 2, 3].map((item) => (
-          <div key={item} className="h-32 animate-pulse rounded-2xl bg-slate-200" />
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.push(`/clientes/${clienteId}/evaluacion/historial`)}
+        >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Evaluación crediticia</h2>
-          <p className="text-sm text-slate-500">
-            Resumen vigente, Nosis y nueva evaluación para el cliente.
-          </p>
-        </div>
-        <div className="ml-auto flex gap-2">
-          <Link href={`/clientes/${clienteId}`}>
-            <Button variant="outline" size="sm">Volver al cliente</Button>
-          </Link>
-          <Link href={`/clientes/${clienteId}/evaluacion/historial`}>
-            <Button variant="outline" size="sm">
-              <History className="mr-2 h-4 w-4" />
-              Ver historial
-            </Button>
-          </Link>
+          <h2 className="text-2xl font-semibold text-slate-900">Nueva evaluacion crediticia</h2>
+          <p className="text-sm text-slate-500">Puntuar del 1 al 10 cada item</p>
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <Card className="border-slate-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ShieldCheck className="h-4 w-4 text-slate-500" />
-              Resumen vigente
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs uppercase tracking-wide text-slate-500">Score calculado</div>
-                <div className="mt-2 text-3xl font-semibold text-slate-900">
-                  {evaluacionVigente ? round2(evaluacionVigente.score_final) : "—"}
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs uppercase tracking-wide text-slate-500">Score Nosis</div>
-                <div className="mt-2 text-3xl font-semibold text-slate-900">
-                  {cliente?.nosis_ultimo?.score ?? ultimaConsultaNosis?.score ?? "—"}
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs uppercase tracking-wide text-slate-500">Tier sugerido</div>
-                <div className="mt-2">
-                  {evaluacionVigente ? (
-                    <Badge className={TIER_STYLES[evaluacionVigente.tier_sugerido ?? evaluacionVigente.tier]}>
-                      {TIER_LABELS[evaluacionVigente.tier_sugerido ?? evaluacionVigente.tier]}
-                    </Badge>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs uppercase tracking-wide text-slate-500">Tier asignado</div>
-                <div className="mt-2">
-                  {cliente?.tier_crediticio || evaluacionVigente?.tier_asignado ? (
-                    <Badge className={TIER_STYLES[(cliente?.tier_crediticio ?? evaluacionVigente?.tier_asignado)!]}>
-                      {TIER_LABELS[(cliente?.tier_crediticio ?? evaluacionVigente?.tier_asignado)!]}
-                    </Badge>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-xl border border-slate-200 p-4">
-                <div className="text-sm text-slate-500">Límite sugerido</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">
-                  {ars(
-                    evaluacionVigente?.limite_sugerido ??
-                      evaluacionVigente?.limite_credito_sugerido ??
-                      (evaluacionVigente ? calculateLimit(evaluacionVigente.tier) : null)
-                  )}
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 p-4">
-                <div className="text-sm text-slate-500">Límite asignado</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">
-                  {ars(cliente?.limite_credito_asignado ?? cliente?.limite_credito_vigente ?? evaluacionVigente?.limite_credito_asignado)}
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 p-4">
-                <div className="text-sm text-slate-500">Estado</div>
-                <div className="mt-2">
-                  <Badge className={statusBadgeClass(evaluacionVigente?.estado)}>
-                    {evaluacionVigente?.estado ?? "sin evaluación"}
-                  </Badge>
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 p-4">
-                <div className="text-sm text-slate-500">Vigencia</div>
-                <div className="mt-1 text-sm font-medium text-slate-900">
-                  {formatDate(cliente?.evaluacion_vigente_hasta ?? evaluacionVigente?.updated_at)}
-                </div>
-              </div>
-            </div>
-
-            {evaluacionVigente ? (
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-xl border border-slate-200 p-4">
-                  <div className="text-sm text-slate-500">Cualitativos</div>
-                  <div className="mt-1 text-2xl font-semibold text-slate-900">
-                    {round2(evaluacionVigente.score_cualitativo)}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-slate-200 p-4">
-                  <div className="text-sm text-slate-500">Conflictos</div>
-                  <div className="mt-1 text-2xl font-semibold text-slate-900">
-                    {round2(evaluacionVigente.score_conflictos)}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-slate-200 p-4">
-                  <div className="text-sm text-slate-500">Cuantitativos</div>
-                  <div className="mt-1 text-2xl font-semibold text-slate-900">
-                    {round2(evaluacionVigente.score_cuantitativo)}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-                No hay una evaluación vigente todavía. Podés registrar una nueva abajo.
-              </div>
-            )}
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              {evaluacionVigente?.estado === "borrador" ? (
-                "El backend actual solo expone alta e historial de evaluaciones. La aprobación o rechazo se mostrará cuando exista una acción específica de backend."
-              ) : (
-                "La decisión visible proviene de la última evaluación almacenada y de la asignación vigente del cliente."
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
+      <div className="grid gap-6 xl:grid-cols-[1fr_280px]">
+        {/* Items */}
         <div className="space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Nosis</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 p-4">
-                  <div className="text-sm text-slate-500">Último score</div>
-                  <div className="mt-1 text-2xl font-semibold text-slate-900">
-                    {cliente?.nosis_ultimo?.score ?? ultimaConsultaNosis?.score ?? "—"}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-slate-200 p-4">
-                  <div className="text-sm text-slate-500">Situación BCRA</div>
-                  <div className="mt-1 text-2xl font-semibold text-slate-900">
-                    {cliente?.nosis_ultimo?.situacion_bcra ?? ultimaConsultaNosis?.situacion_bcra ?? "—"}
-                  </div>
-                </div>
-              </div>
-              <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="text-slate-500">Cheques rechazados</dt>
-                  <dd className="font-medium text-slate-900">
-                    {cliente?.nosis_ultimo?.cheques_rechazados ?? ultimaConsultaNosis?.cheques_rechazados ?? 0}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Juicios activos</dt>
-                  <dd className="font-medium text-slate-900">
-                    {cliente?.nosis_ultimo?.juicios_activos ?? ultimaConsultaNosis?.juicios_activos ?? 0}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Última consulta</dt>
-                  <dd className="font-medium text-slate-900">
-                    {formatDate(cliente?.nosis_ultimo?.fecha ?? ultimaConsultaNosis?.fecha_consulta)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Estado último intento</dt>
-                  <dd className="font-medium text-slate-900">
-                    {ultimaConsultaNosis?.estado ?? (cliente?.nosis_ultimo ? "exitoso" : "sin consulta")}
-                  </dd>
-                </div>
-              </dl>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Historial reciente</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {evaluaciones.slice(0, 3).map((evaluacion) => (
-                <div key={evaluacion.id} className="rounded-xl border border-slate-200 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="font-medium text-slate-900">{formatDate(evaluacion.created_at)}</div>
-                      <div className="text-sm text-slate-500">
-                        Score {round2(evaluacion.score_final)} · Nosis {evaluacion.score_nosis ?? "—"}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className={TIER_STYLES[evaluacion.tier_sugerido ?? evaluacion.tier]}>
-                        {TIER_LABELS[evaluacion.tier_sugerido ?? evaluacion.tier]}
-                      </Badge>
-                      <Badge className={statusBadgeClass(evaluacion.estado)}>{evaluacion.estado}</Badge>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {nosisConsultas.slice(0, 3).map((consulta) => (
-                <div key={consulta.id} className="rounded-xl border border-slate-200 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="font-medium text-slate-900">{formatDate(consulta.fecha_consulta)}</div>
-                      <div className="text-sm text-slate-500">
-                        Score {consulta.score ?? "—"} · BCRA {consulta.situacion_bcra ?? "—"}
-                      </div>
-                    </div>
-                    <Badge
-                      className={
-                        consulta.estado === "exitoso"
-                          ? "bg-green-100 text-green-800 border-green-200"
-                          : "bg-red-100 text-red-800 border-red-200"
-                      }
-                    >
-                      Nosis {consulta.estado}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-              {evaluaciones.length === 0 && nosisConsultas.length === 0 && (
-                <div className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-                  Todavía no hay evaluaciones ni consultas Nosis registradas.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {preview && (
-        <Card className="border-2 border-slate-200">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Score estimado en tiempo real</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap items-center gap-4">
-              <div>
-                <div className="text-xs text-slate-400">Cualitativos</div>
-                <div className="text-lg font-semibold">{round2(preview.score_cualitativo)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-400">Conflictos</div>
-                <div className="text-lg font-semibold">{round2(preview.score_conflictos)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-400">Cuantitativos</div>
-                <div className="text-lg font-semibold">{round2(preview.score_cuantitativo)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-400">Score final</div>
-                <div className="text-2xl font-bold text-slate-900">{round2(preview.score_final)}</div>
-              </div>
-              <Badge className={TIER_STYLES[preview.tier]}>{TIER_LABELS[preview.tier]}</Badge>
-              <div>
-                <div className="text-xs text-slate-400">Límite sugerido</div>
-                <div className="text-lg font-semibold text-slate-900">{ars(calculateLimit(preview.tier))}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <div className="space-y-6">
-          {[
-            { key: "cualitativo", label: "Aspectos cualitativos (43%)" },
-            { key: "conflictos", label: "Conflictos e incumplimientos (31%)" },
-            { key: "cuantitativo", label: "Aspectos cuantitativos (26%)" },
-          ].map((categoria) => {
-            const items = SCORING_ITEMS_CATALOG.filter((item) => item.categoria === categoria.key);
-
-            return (
-              <Card key={categoria.key}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">{categoria.label}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr]"
-                    >
-                      <label
-                        htmlFor={`puntaje-${item.id}`}
-                        className="flex items-center text-sm font-medium text-slate-700"
-                      >
-                        {item.nombre}
-                      </label>
-                      <input
-                        id={`puntaje-${item.id}`}
-                        type="number"
-                        min={1}
-                        max={10}
-                        step={1}
-                        value={puntajes[item.id] ?? ""}
-                        onChange={(e) => handlePuntaje(item.id, e.target.value)}
-                        className="w-24 rounded-md border border-slate-300 px-3 py-1.5 text-center text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        placeholder="1-10"
-                      />
-                      <input
-                        type="text"
-                        value={notas[item.id] ?? ""}
-                        onChange={(e) =>
-                          setNotas((prev) => ({ ...prev, [item.id]: e.target.value }))
-                        }
-                        className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        placeholder="Nota opcional"
-                      />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Información adicional</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={nosisConsultado}
-                  onChange={(e) => setNosisConsultado(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                Consulté Nosis antes de esta evaluación
-              </label>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                <div className="font-medium text-slate-900">Último score Nosis disponible</div>
-                <div className="mt-1 text-xl font-semibold">
-                  {cliente?.nosis_ultimo?.score ?? ultimaConsultaNosis?.score ?? "—"}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor="observaciones" className="text-sm font-medium text-slate-700">
-                  Observaciones
-                </label>
-                <textarea
-                  id="observaciones"
-                  rows={6}
-                  value={observaciones}
-                  onChange={(e) => setObservaciones(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="Comentarios adicionales sobre la evaluación..."
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {resultado && (
-            <Card className="border-2 border-green-200 bg-green-50/60">
+          {CATEGORIAS.map((cat) => (
+            <Card key={cat}>
               <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base text-green-900">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Evaluación guardada correctamente
-                </CardTitle>
+                <CardTitle className="text-base">{CATEGORIA_LABELS[cat]}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Badge className={TIER_STYLES[resultado.tier_sugerido ?? resultado.tier]}>
-                    {TIER_LABELS[resultado.tier_sugerido ?? resultado.tier]}
-                  </Badge>
-                  <Badge className={statusBadgeClass(resultado.estado)}>{resultado.estado}</Badge>
-                </div>
-                <div className="text-sm text-slate-700">
-                  Score final {round2(resultado.score_final)} · Límite sugerido{" "}
-                  {ars(resultado.limite_sugerido ?? resultado.limite_credito_sugerido)}
-                </div>
+                {CATALOG.filter((i) => i.categoria === cat).map((item) => {
+                  const curr = scores[item.id];
+                  return (
+                    <div key={item.id} className="rounded-xl border border-slate-200 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex-1 space-y-2">
+                          <div className="font-medium text-slate-900">{item.nombre}</div>
+                          <div className="flex flex-wrap gap-1">
+                            {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+                              <button
+                                key={n}
+                                type="button"
+                                onClick={() => setPuntaje(item.id, n)}
+                                className={`h-8 w-8 rounded-lg border text-sm font-medium transition-colors ${
+                                  curr.puntaje === n
+                                    ? "border-slate-900 bg-slate-900 text-white"
+                                    : "border-slate-200 text-slate-600 hover:border-slate-400 hover:bg-slate-50"
+                                }`}
+                              >
+                                {n}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setPuntaje(item.id, null)}
+                              className={`h-8 rounded-lg border px-2 text-xs transition-colors ${
+                                curr.puntaje === null
+                                  ? "border-amber-500 bg-amber-50 text-amber-700"
+                                  : "border-slate-200 text-slate-400 hover:bg-slate-50"
+                              }`}
+                            >
+                              S/D
+                            </button>
+                          </div>
+                        </div>
+                        <div className="sm:w-44">
+                          <Label className="text-xs text-slate-400">Nota</Label>
+                          <Textarea
+                            rows={2}
+                            value={curr.nota}
+                            onChange={(e) => setNota(item.id, e.target.value)}
+                            placeholder="Opcional..."
+                            className="mt-1 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </CardContent>
             </Card>
-          )}
+          ))}
 
-          <Card className="border-dashed">
-            <CardContent className="py-6">
-              <div className="flex items-start gap-3 text-sm text-slate-600">
-                <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-500" />
-                <p>
-                  Si el backend incorpora endpoints de aprobación o rechazo, esta vista ya
-                  tiene espacio para mostrar la decisión vigente y el límite asignado.
-                </p>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Datos adicionales</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="nosis">Score Nosis (dejar vacio si no se consulto)</Label>
+                <Input
+                  id="nosis"
+                  type="number"
+                  min={0}
+                  max={1000}
+                  value={nosisScore}
+                  onChange={(e) => setNosisScore(e.target.value)}
+                  placeholder="Ej: 750"
+                  className="max-w-xs"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="obs">Observaciones</Label>
+                <Textarea
+                  id="obs"
+                  rows={3}
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                  placeholder="Contexto adicional, alertas o notas del analista..."
+                />
               </div>
             </CardContent>
           </Card>
+        </div>
 
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => router.back()}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSubmit} disabled={guardando}>
-              <ClipboardCheck className="mr-2 h-4 w-4" />
-              {guardando ? "Guardando..." : "Guardar evaluación"}
-            </Button>
-          </div>
+        {/* Score en vivo */}
+        <div className="sticky top-6 space-y-4 self-start">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Score en vivo</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {CATEGORIAS.map((cat) => {
+                const val = cat === "cualitativo" ? result.cualitativo
+                  : cat === "conflictos" ? result.conflictos
+                  : result.cuantitativo;
+                return (
+                  <div key={cat} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2 text-sm">
+                    <span className="capitalize text-slate-500">{cat}</span>
+                    <span className="font-mono font-semibold">{val.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+
+              <div className="rounded-xl bg-slate-900 px-4 py-4 text-center text-white">
+                <div className="text-xs uppercase tracking-wide text-slate-400">Score final</div>
+                <div className="mt-1 text-4xl font-bold">{result.final.toFixed(2)}</div>
+              </div>
+
+              <div className="text-center">
+                <Badge className={result.tier.color}>{result.tier.label}</Badge>
+              </div>
+
+              {result.completo ? (
+                <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                  Todos los items completados
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  Faltan items por puntuar
+                </div>
+              )}
+
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {error}
+                </div>
+              )}
+
+              <Button
+                className="w-full"
+                onClick={handleSubmit}
+                disabled={saving || !result.completo}
+              >
+                {saving
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : <Save className="mr-2 h-4 w-4" />}
+                {saving ? "Guardando..." : "Guardar evaluacion"}
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => router.push(`/clientes/${clienteId}/evaluacion/historial`)}
+              >
+                Ver historial
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs uppercase tracking-wide text-slate-400">
+                Escala de tiers
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {TIERS.map((t) => (
+                <div key={t.label} className="flex items-center justify-between rounded-lg px-2 py-1 text-xs">
+                  <Badge className={t.color}>{t.label}</Badge>
+                  <span className="font-mono text-slate-500">{"\u2265"} {t.min}.0</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

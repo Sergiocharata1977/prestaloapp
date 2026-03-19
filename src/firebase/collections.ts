@@ -1,6 +1,8 @@
 export const FIN_CAJAS = 'fin_cajas'
 export const FIN_COBROS = 'fin_cobros'
 export const FIN_LEDGER = 'fin_ledger_entries'
+export const FIN_CHEQUES = 'fin_cheques'
+export const FIN_OPERACIONES_CHEQUE = 'fin_operaciones_cheque'
 
 export const FIN_COLLECTIONS = {
   orgBase: (orgId: string) => `organizations/${orgId}`,
@@ -26,6 +28,17 @@ export const FIN_COLLECTIONS = {
   creditos: (orgId: string) => `organizations/${orgId}/fin_creditos`,
   credito: (orgId: string, id: string) =>
     `organizations/${orgId}/fin_creditos/${id}`,
+
+  cheques: (orgId: string) => `organizations/${orgId}/fin_cheques`,
+  cheque: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_cheques/${id}`,
+
+  operacionesCheque: (orgId: string) =>
+    `organizations/${orgId}/fin_operaciones_cheque`,
+  operacionCheque: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_operaciones_cheque/${id}`,
+  operacionesCheques: (orgId: string) =>
+    `organizations/${orgId}/fin_operaciones_cheque`,
 
   cuotas: (orgId: string) => `organizations/${orgId}/fin_cuotas`,
   cuota: (orgId: string, id: string) =>
@@ -59,6 +72,14 @@ export const FIN_COLLECTIONS = {
   evaluaciones: (orgId: string) => `organizations/${orgId}/fin_evaluaciones`,
   evaluacion: (orgId: string, id: string) =>
     `organizations/${orgId}/fin_evaluaciones/${id}`,
+
+  legajos: (orgId: string) => `organizations/${orgId}/fin_legajos`,
+  legajo: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_legajos/${id}`,
+  legajoDocumentos: (orgId: string, legajoId: string) =>
+    `organizations/${orgId}/fin_legajos/${legajoId}/fin_documentos`,
+  legajoDocumento: (orgId: string, legajoId: string, documentoId: string) =>
+    `organizations/${orgId}/fin_legajos/${legajoId}/fin_documentos/${documentoId}`,
 
   scoringConfig: (orgId: string) =>
     `organizations/${orgId}/fin_configuracion/scoring`,

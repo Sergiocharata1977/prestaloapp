@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Printer } from "lucide-react";
 import type { FinCobro } from "@/types/fin-cobro";
 import { apiFetch } from "@/lib/apiFetch";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,25 @@ const columns: Column<FinCobro>[] = [
   { key: "interes_cobrado", header: "Interés", render: (r) => ars(r.interes_cobrado), className: "text-right font-mono" },
   { key: "total_cobrado", header: "Total", render: (r) => ars(r.total_cobrado), className: "text-right font-mono font-semibold" },
   { key: "medio_pago", header: "Medio de pago", render: (r) => r.medio_pago === "efectivo" ? "Efectivo" : r.medio_pago },
+  {
+    key: "actions",
+    header: "",
+    width: "180px",
+    render: (cobro) => (
+      <div className="flex justify-end">
+        <Button asChild size="sm" variant="outline">
+          <Link
+            href={`/print/cobro/${cobro.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Printer className="h-4 w-4" />
+            Imprimir recibo
+          </Link>
+        </Button>
+      </div>
+    ),
+  },
 ];
 
 export default function CobrosPage() {

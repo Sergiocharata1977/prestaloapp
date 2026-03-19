@@ -205,6 +205,8 @@ function buildCreditoConCuotas(params: {
     articulo_descripcion: articuloDescripcion,
     capital,
     tasa_mensual: tasaMensual,
+    snapshot_tasa_mensual: tasaMensual * 100,
+    snapshot_tasa_punitoria_mensual: 0,
     cantidad_cuotas: cantidadCuotas,
     sistema: 'frances',
     total_intereses: tabla.total_intereses,

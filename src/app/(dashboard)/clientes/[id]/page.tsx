@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ClipboardCheck,
   Eye,
+  FileText,
   History,
   RefreshCw,
   ShieldCheck,
@@ -24,14 +25,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/fin/StatusBadge";
+import { ClienteLegajoTab } from "@/components/fin/cliente/ClienteLegajoTab";
+import { ClienteResumenCrediticio } from "@/components/fin/cliente/ClienteResumenCrediticio";
+import { ClienteTabs } from "@/components/fin/cliente/ClienteTabs";
 
 function ars(n?: number | null) {
-  if (n === null || n === undefined) return "—";
+  if (n === null || n === undefined) return "â€”";
   return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "â€”";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("es-AR", {
@@ -74,7 +78,7 @@ const creditoColumns: Column<FinCredito>[] = [
   {
     key: "sistema",
     header: "Sistema",
-    render: (r) => (r.sistema === "frances" ? "Francés" : "Alemán"),
+    render: (r) => (r.sistema === "frances" ? "FrancÃ©s" : "AlemÃ¡n"),
   },
   {
     key: "cantidad_cuotas",
@@ -104,7 +108,7 @@ const cobroColumns: Column<FinCobro>[] = [
   },
   {
     key: "interes_cobrado",
-    header: "Interés",
+    header: "InterÃ©s",
     render: (r) => ars(r.interes_cobrado),
     className: "text-right font-mono",
   },
@@ -140,6 +144,7 @@ export default function ClienteDetailPage() {
   const [nosisConsultas, setNosisConsultas] = useState<FinClienteNosisConsulta[]>([]);
   const [loading, setLoading] = useState(true);
   const [consultandoNosis, setConsultandoNosis] = useState(false);
+  const [activeTab, setActiveTab] = useState<"resumen" | "legajo">("resumen");
 
   const loadData = async () => {
     if (!id) return;
@@ -196,6 +201,7 @@ export default function ClienteDetailPage() {
   );
   const nosis = cliente?.nosis_ultimo;
   const ultimaConsultaNosis = nosisConsultas[0] ?? null;
+  const legajoEstado = cliente?.legajo?.estado ?? "incompleto";
 
   if (loading) {
     return (
@@ -234,15 +240,15 @@ export default function ClienteDetailPage() {
         <CardContent>
           <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
             {[
-              ["Tipo", cliente.tipo === "fisica" ? "Persona física" : "Persona jurídica"],
-              ["DNI", cliente.dni ?? "—"],
-              ["Teléfono", cliente.telefono ?? "—"],
-              ["Email", cliente.email ?? "—"],
-              ["Domicilio", cliente.domicilio ?? "—"],
-              ["Localidad", cliente.localidad ?? "—"],
-              ["Provincia", cliente.provincia ?? "—"],
+              ["Tipo", cliente.tipo === "fisica" ? "Persona fÃ­sica" : "Persona jurÃ­dica"],
+              ["DNI", cliente.dni ?? "â€”"],
+              ["TelÃ©fono", cliente.telefono ?? "â€”"],
+              ["Email", cliente.email ?? "â€”"],
+              ["Domicilio", cliente.domicilio ?? "â€”"],
+              ["Localidad", cliente.localidad ?? "â€”"],
+              ["Provincia", cliente.provincia ?? "â€”"],
               ["Saldo adeudado", ars(cliente.saldo_total_adeudado)],
-              ["Tier vigente", cliente.tier_crediticio ? TIER_LABELS[cliente.tier_crediticio] : "—"],
+              ["Tier vigente", cliente.tier_crediticio ? TIER_LABELS[cliente.tier_crediticio] : "â€”"],
             ].map(([label, value]) => (
               <div key={label}>
                 <dt className="text-slate-400">{label}</dt>
@@ -253,264 +259,317 @@ export default function ClienteDetailPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-slate-500" />
-              Evaluación crediticia
-            </CardTitle>
-            <div className="flex gap-2">
-              <Link href={`/clientes/${id}/evaluacion`}>
-                <Button size="sm">
-                  <ClipboardCheck className="mr-2 h-4 w-4" />
-                  Nueva evaluación
-                </Button>
-              </Link>
-              <Link href={`/clientes/${id}/evaluacion/historial`}>
-                <Button variant="outline" size="sm">
-                  <History className="mr-2 h-4 w-4" />
-                  Ver historial
-                </Button>
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {evaluacionVigente ? (
-              <>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Score calculado</div>
-                    <div className="mt-1 text-3xl font-semibold text-slate-900">
-                      {evaluacionVigente.score_final.toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Score Nosis</div>
-                    <div className="mt-1 text-3xl font-semibold text-slate-900">
-                      {evaluacionVigente.score_nosis ?? nosis?.score ?? "—"}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Tier sugerido</div>
-                    <div className="mt-2">
-                      <Badge className={TIER_STYLES[evaluacionVigente.tier_sugerido ?? evaluacionVigente.tier]}>
-                        {TIER_LABELS[evaluacionVigente.tier_sugerido ?? evaluacionVigente.tier]}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Estado</div>
-                    <div className="mt-2">
-                      <Badge className={estadoClass(evaluacionVigente.estado)}>
-                        {evaluacionVigente.estado}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
+      <ClienteTabs
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        items={[
+          {
+            id: "resumen",
+            label: "Resumen",
+            icon: <Eye className="h-4 w-4" />,
+          },
+          {
+            id: "legajo",
+            label: "Legajo",
+            icon: <FileText className="h-4 w-4" />,
+            badge: legajoEstado === "completo" ? "Completo" : "Incompleto",
+          },
+        ]}
+      />
 
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-xl border border-slate-200 p-4">
-                    <div className="text-sm text-slate-500">Tier asignado</div>
-                    <div className="mt-2">
-                      {cliente.tier_crediticio || evaluacionVigente.tier_asignado ? (
-                        <Badge
-                          className={
-                            TIER_STYLES[(cliente.tier_crediticio ?? evaluacionVigente.tier_asignado)!]
-                          }
-                        >
-                          {TIER_LABELS[(cliente.tier_crediticio ?? evaluacionVigente.tier_asignado)!]}
-                        </Badge>
-                      ) : (
-                        <span className="text-sm text-slate-500">Pendiente</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 p-4">
-                    <div className="text-sm text-slate-500">Límite sugerido</div>
-                    <div className="mt-1 text-lg font-semibold text-slate-900">
-                      {ars(evaluacionVigente.limite_sugerido ?? evaluacionVigente.limite_credito_sugerido)}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 p-4">
-                    <div className="text-sm text-slate-500">Límite asignado</div>
-                    <div className="mt-1 text-lg font-semibold text-slate-900">
-                      {ars(cliente.limite_credito_asignado ?? cliente.limite_credito_vigente ?? evaluacionVigente.limite_credito_asignado)}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 p-4">
-                    <div className="text-sm text-slate-500">Vigencia</div>
-                    <div className="mt-1 text-sm font-medium text-slate-900">
-                      {formatDate(cliente.evaluacion_vigente_hasta ?? evaluacionVigente.updated_at)}
-                    </div>
-                  </div>
-                </div>
+      {activeTab === "legajo" ? (
+        <ClienteLegajoTab cliente={cliente} onClienteUpdated={setCliente} />
+      ) : (
+        <>
+          <ClienteResumenCrediticio
+            cliente={cliente}
+            creditos={creditos}
+            evaluacionVigente={evaluacionVigente}
+          />
 
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl border border-slate-200 p-4">
-                    <div className="text-sm text-slate-500">Cualitativos</div>
-                    <div className="mt-1 text-2xl font-semibold text-slate-900">
-                      {evaluacionVigente.score_cualitativo.toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 p-4">
-                    <div className="text-sm text-slate-500">Conflictos</div>
-                    <div className="mt-1 text-2xl font-semibold text-slate-900">
-                      {evaluacionVigente.score_conflictos.toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 p-4">
-                    <div className="text-sm text-slate-500">Cuantitativos</div>
-                    <div className="mt-1 text-2xl font-semibold text-slate-900">
-                      {evaluacionVigente.score_cuantitativo.toFixed(2)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
+          <div className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-slate-500" />
+                  EvaluaciÃ³n crediticia
+                </CardTitle>
+                <div className="flex gap-2">
                   <Link href={`/clientes/${id}/evaluacion`}>
+                    <Button size="sm">
+                      <ClipboardCheck className="mr-2 h-4 w-4" />
+                      Nueva evaluaciÃ³n
+                    </Button>
+                  </Link>
+                  <Link href={`/clientes/${id}/evaluacion/historial`}>
                     <Button variant="outline" size="sm">
-                      <Eye className="mr-2 h-4 w-4" />
-                      Ver tablero de evaluación
+                      <History className="mr-2 h-4 w-4" />
+                      Ver historial
                     </Button>
                   </Link>
                 </div>
-              </>
-            ) : (
-              <p className="text-sm text-slate-500">
-                Este cliente todavía no tiene evaluación crediticia registrada.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Información Nosis</CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={consultarNosis}
-              disabled={consultandoNosis}
-            >
-              <RefreshCw className={`h-3 w-3 ${consultandoNosis ? "animate-spin" : ""}`} />
-              {consultandoNosis ? "Consultando..." : "Consultar Nosis"}
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {nosis ? (
-              <>
-                <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-                  <div>
-                    <dt className="text-slate-400">Score</dt>
-                    <dd className="font-medium">{nosis.score ?? "N/D"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-slate-400">Situación BCRA</dt>
-                    <dd className="font-medium">{nosis.situacion_bcra ?? "N/D"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-slate-400">Cheques rechazados</dt>
-                    <dd className="font-medium">{nosis.cheques_rechazados}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-slate-400">Juicios activos</dt>
-                    <dd className="font-medium">{nosis.juicios_activos}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-slate-400">Fecha consulta</dt>
-                    <dd className="font-medium">{formatDate(nosis.fecha)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-slate-400">Consultado por</dt>
-                    <dd className="font-medium">{nosis.consultado_por}</dd>
-                  </div>
-                </dl>
-
-                <div className="space-y-2 border-t border-slate-100 pt-4">
-                  <div className="text-sm font-medium text-slate-900">Historial reciente</div>
-                  {nosisConsultas.slice(0, 3).map((consulta) => (
-                    <div
-                      key={consulta.id}
-                      className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
-                    >
-                      <div>
-                        <div className="font-medium text-slate-900">
-                          {formatDate(consulta.fecha_consulta)}
-                        </div>
-                        <div className="text-slate-500">
-                          Score {consulta.score ?? "—"} · BCRA{" "}
-                          {consulta.situacion_bcra ?? "—"}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {evaluacionVigente ? (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="text-xs uppercase tracking-wide text-slate-500">Score calculado</div>
+                        <div className="mt-1 text-3xl font-semibold text-slate-900">
+                          {evaluacionVigente.score_final.toFixed(2)}
                         </div>
                       </div>
-                      <Badge
-                        className={
-                          consulta.estado === "exitoso"
-                            ? "bg-green-100 text-green-800 border-green-200"
-                            : "bg-red-100 text-red-800 border-red-200"
-                        }
-                      >
-                        {consulta.estado}
-                      </Badge>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="text-xs uppercase tracking-wide text-slate-500">Score Nosis</div>
+                        <div className="mt-1 text-3xl font-semibold text-slate-900">
+                          {evaluacionVigente.score_nosis ?? nosis?.score ?? "â€”"}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="text-xs uppercase tracking-wide text-slate-500">Tier sugerido</div>
+                        <div className="mt-2">
+                          <Badge
+                            className={
+                              TIER_STYLES[
+                                evaluacionVigente.tier_sugerido ?? evaluacionVigente.tier
+                              ]
+                            }
+                          >
+                            {TIER_LABELS[
+                              evaluacionVigente.tier_sugerido ?? evaluacionVigente.tier
+                            ]}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="text-xs uppercase tracking-wide text-slate-500">Estado</div>
+                        <div className="mt-2">
+                          <Badge className={estadoClass(evaluacionVigente.estado)}>
+                            {evaluacionVigente.estado}
+                          </Badge>
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-slate-400">
-                Sin datos Nosis. Hacé clic en &quot;Consultar Nosis&quot;.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">Créditos</h3>
-          <Button size="sm" onClick={() => router.push(`/creditos/nuevo?clienteId=${id}`)}>
-            Nuevo crédito
-          </Button>
-        </div>
-        <DataTable
-          columns={creditoColumns}
-          data={creditos}
-          emptyMessage="Sin créditos registrados."
-          onRowClick={(row) => router.push(`/creditos/${row.id}`)}
-        />
-      </div>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-xl border border-slate-200 p-4">
+                        <div className="text-sm text-slate-500">Tier asignado</div>
+                        <div className="mt-2">
+                          {cliente.tier_crediticio || evaluacionVigente.tier_asignado ? (
+                            <Badge
+                              className={
+                                TIER_STYLES[
+                                  (cliente.tier_crediticio ?? evaluacionVigente.tier_asignado)!
+                                ]
+                              }
+                            >
+                              {
+                                TIER_LABELS[
+                                  (cliente.tier_crediticio ?? evaluacionVigente.tier_asignado)!
+                                ]
+                              }
+                            </Badge>
+                          ) : (
+                            <span className="text-sm text-slate-500">Pendiente</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-4">
+                        <div className="text-sm text-slate-500">LÃ­mite sugerido</div>
+                        <div className="mt-1 text-lg font-semibold text-slate-900">
+                          {ars(
+                            evaluacionVigente.limite_sugerido ??
+                              evaluacionVigente.limite_credito_sugerido
+                          )}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-4">
+                        <div className="text-sm text-slate-500">LÃ­mite asignado</div>
+                        <div className="mt-1 text-lg font-semibold text-slate-900">
+                          {ars(
+                            cliente.limite_credito_asignado ??
+                              cliente.limite_credito_vigente ??
+                              evaluacionVigente.limite_credito_asignado
+                          )}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-4">
+                        <div className="text-sm text-slate-500">Vigencia</div>
+                        <div className="mt-1 text-sm font-medium text-slate-900">
+                          {formatDate(
+                            cliente.evaluacion_vigente_hasta ?? evaluacionVigente.updated_at
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">Cuenta corriente</h3>
-          <div className="flex items-center gap-3">
-            <Link href={`/clientes/${id}/cuenta-corriente`}>
-              <Button variant="outline" size="sm">
-                <History className="mr-1 h-3 w-3" />
-                Cuenta corriente
-              </Button>
-            </Link>
-            {cuentaCorriente && (
-              <div className="flex gap-3">
-                <Badge variant="outline" className="font-mono">
-                  Capital: {ars(cuentaCorriente.total_capital)}
-                </Badge>
-                <Badge variant="outline" className="font-mono">
-                  Intereses: {ars(cuentaCorriente.total_intereses)}
-                </Badge>
-                <Badge className="bg-green-100 font-mono text-green-800">
-                  Total cobrado: {ars(cuentaCorriente.total_cobrado)}
-                </Badge>
-              </div>
-            )}
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-xl border border-slate-200 p-4">
+                        <div className="text-sm text-slate-500">Cualitativos</div>
+                        <div className="mt-1 text-2xl font-semibold text-slate-900">
+                          {evaluacionVigente.score_cualitativo.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-4">
+                        <div className="text-sm text-slate-500">Conflictos</div>
+                        <div className="mt-1 text-2xl font-semibold text-slate-900">
+                          {evaluacionVigente.score_conflictos.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-4">
+                        <div className="text-sm text-slate-500">Cuantitativos</div>
+                        <div className="mt-1 text-2xl font-semibold text-slate-900">
+                          {evaluacionVigente.score_cuantitativo.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Link href={`/clientes/${id}/evaluacion`}>
+                        <Button variant="outline" size="sm">
+                          <Eye className="mr-2 h-4 w-4" />
+                          Ver tablero de evaluaciÃ³n
+                        </Button>
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    Este cliente todavÃ­a no tiene evaluaciÃ³n crediticia registrada.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>InformaciÃ³n Nosis</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={consultarNosis}
+                  disabled={consultandoNosis}
+                >
+                  <RefreshCw className={`h-3 w-3 ${consultandoNosis ? "animate-spin" : ""}`} />
+                  {consultandoNosis ? "Consultando..." : "Consultar Nosis"}
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {nosis ? (
+                  <>
+                    <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="text-slate-400">Score</dt>
+                        <dd className="font-medium">{nosis.score ?? "N/D"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-400">SituaciÃ³n BCRA</dt>
+                        <dd className="font-medium">{nosis.situacion_bcra ?? "N/D"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-400">Cheques rechazados</dt>
+                        <dd className="font-medium">{nosis.cheques_rechazados}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-400">Juicios activos</dt>
+                        <dd className="font-medium">{nosis.juicios_activos}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-400">Fecha consulta</dt>
+                        <dd className="font-medium">{formatDate(nosis.fecha)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-400">Consultado por</dt>
+                        <dd className="font-medium">{nosis.consultado_por}</dd>
+                      </div>
+                    </dl>
+
+                    <div className="space-y-2 border-t border-slate-100 pt-4">
+                      <div className="text-sm font-medium text-slate-900">Historial reciente</div>
+                      {nosisConsultas.slice(0, 3).map((consulta) => (
+                        <div
+                          key={consulta.id}
+                          className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
+                        >
+                          <div>
+                            <div className="font-medium text-slate-900">
+                              {formatDate(consulta.fecha_consulta)}
+                            </div>
+                            <div className="text-slate-500">
+                              Score {consulta.score ?? "â€”"} Â· BCRA{" "}
+                              {consulta.situacion_bcra ?? "â€”"}
+                            </div>
+                          </div>
+                          <Badge
+                            className={
+                              consulta.estado === "exitoso"
+                                ? "bg-green-100 text-green-800 border-green-200"
+                                : "bg-red-100 text-red-800 border-red-200"
+                            }
+                          >
+                            {consulta.estado}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-400">
+                    Sin datos Nosis. HacÃ© clic en &quot;Consultar Nosis&quot;.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           </div>
-        </div>
-        <DataTable
-          columns={cobroColumns}
-          data={cuentaCorriente?.cobros ?? []}
-          emptyMessage="Sin cobros registrados."
-        />
-      </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">CrÃ©ditos</h3>
+              <Button size="sm" onClick={() => router.push(`/creditos/nuevo?clienteId=${id}`)}>
+                Nuevo crÃ©dito
+              </Button>
+            </div>
+            <DataTable
+              columns={creditoColumns}
+              data={creditos}
+              emptyMessage="Sin crÃ©ditos registrados."
+              onRowClick={(row) => router.push(`/creditos/${row.id}`)}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Cuenta corriente</h3>
+              <div className="flex items-center gap-3">
+                <Link href={`/clientes/${id}/cuenta-corriente`}>
+                  <Button variant="outline" size="sm">
+                    <History className="mr-1 h-3 w-3" />
+                    Cuenta corriente
+                  </Button>
+                </Link>
+                {cuentaCorriente && (
+                  <div className="flex gap-3">
+                    <Badge variant="outline" className="font-mono">
+                      Capital: {ars(cuentaCorriente.total_capital)}
+                    </Badge>
+                    <Badge variant="outline" className="font-mono">
+                      Intereses: {ars(cuentaCorriente.total_intereses)}
+                    </Badge>
+                    <Badge className="bg-green-100 font-mono text-green-800">
+                      Total cobrado: {ars(cuentaCorriente.total_cobrado)}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            </div>
+            <DataTable
+              columns={cobroColumns}
+              data={cuentaCorriente?.cobros ?? []}
+              emptyMessage="Sin cobros registrados."
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
