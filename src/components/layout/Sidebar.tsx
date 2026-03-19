@@ -12,11 +12,13 @@ import {
   ClipboardList,
   CreditCard,
   FileText,
+  Gavel,
   Layers,
   LayoutDashboard,
   MonitorSmartphone,
   Scale,
   Settings,
+  Siren,
   UserCircle2,
   Users,
   Wallet,
@@ -38,6 +40,11 @@ const mainItems = [
 const operacionesItems = [
   { href: "/creditos",            label: "Prestamos", icon: CreditCard },
   { href: "/operaciones-cheques", label: "Cheques",   icon: ClipboardList },
+];
+
+const accionesItems = [
+  { href: "/acciones/mora-temprana", label: "Mora temprana", icon: Siren },
+  { href: "/acciones/judiciales", label: "Judiciales", icon: Gavel },
 ];
 
 const configItems = [
@@ -195,6 +202,15 @@ export function Sidebar() {
             <NavLink key={href} href={href} icon={icon} label={label} pathname={pathname} />
           ))}
         </nav>
+
+        <div className="mt-5">
+          <CollapsibleSection
+            label="Acciones"
+            icon={ClipboardList}
+            items={accionesItems}
+            pathname={pathname}
+          />
+        </div>
 
         {/* Configuracion — desplegable */}
         <div className="mt-5">
