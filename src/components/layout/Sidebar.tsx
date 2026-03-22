@@ -7,6 +7,7 @@ import {
   BookOpen,
   BookOpenText,
   BriefcaseBusiness,
+  CalendarDays,
   ChevronDown,
   ChevronRight,
   ClipboardList,
@@ -56,9 +57,13 @@ const configItems = [
   { href: "/plan-cuentas",          label: "Plan de Cuentas", icon: BookOpen },
 ];
 
+const reportesItems = [
+  { href: "/reportes",                       label: "Operativos",      icon: FileText },
+  { href: "/reportes/proyeccion-cobranzas",  label: "Proyec. cobros",  icon: CalendarDays },
+];
+
 const bottomItems = [
-  { href: "/reportes", label: "Reportes", icon: FileText },
-  { href: "/manual",   label: "Manual",   icon: BookOpen },
+  { href: "/manual", label: "Manual", icon: BookOpen },
 ];
 
 const capabilityItems = [
@@ -192,6 +197,16 @@ export function Sidebar() {
             label="Operaciones"
             icon={Layers}
             items={operacionesItems}
+            pathname={pathname}
+          />
+        </div>
+
+        {/* Reportes — desplegable */}
+        <div className="mt-5">
+          <CollapsibleSection
+            label="Reportes"
+            icon={FileText}
+            items={reportesItems}
             pathname={pathname}
           />
         </div>
