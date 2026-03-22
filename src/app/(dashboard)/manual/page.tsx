@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  AlertTriangle,
   BookOpen,
   ChevronDown,
   ChevronRight,
@@ -50,6 +51,7 @@ const SECTIONS: Section[] = [
           "Resumen del día: cobros pendientes, créditos vencidos y cartera activa.",
           "Accesos rápidos a las operaciones más frecuentes.",
           "Indicadores de caja y saldo del día.",
+          "KPIs en tiempo real vía /api/fin/dashboard.",
         ],
       },
     ],
@@ -69,6 +71,7 @@ const SECTIONS: Section[] = [
           "Filtro por tipo de cliente. Header muestra total de cartera del filtro activo.",
           "Búsqueda por nombre o CUIT con debounce de 300ms.",
           "Vista lista (tabla) o tarjetas.",
+          "Botón 'Cargar datos de prueba' para generar seed de clientes ficticios.",
         ],
       },
       {
@@ -86,6 +89,7 @@ const SECTIONS: Section[] = [
           "Legajo: checklist de documentos requeridos.",
           "Créditos del cliente con estado y cuotas pagas.",
           "Operaciones de cheques vinculadas.",
+          "Cuenta corriente: historial de movimientos del cliente.",
           "Botón 'Nueva evaluación' y 'Consultar Nosis'.",
         ],
       },
@@ -95,6 +99,7 @@ const SECTIONS: Section[] = [
           "14 ítems en 3 categorías: Cualitativos (43%), Conflictos (31%), Cuantitativos (26%).",
           "Score final 0-10 determina el tier: A (≥8), B (≥6), C (≥4), Reprobado (<4).",
           "Al guardar queda como evaluación vigente. Las anteriores pasan a historial.",
+          "El analista puede overridear el tier sugerido al aprobar o rechazar.",
         ],
       },
     ],
@@ -114,7 +119,8 @@ const SECTIONS: Section[] = [
           "Seleccionar cliente, política crediticia y plan de financiación.",
           "Ingresar capital, cuotas y sistema (Francés o Alemán).",
           "La tasa se resuelve automáticamente según los tramos del plan.",
-          "Al confirmar: crédito, cuotas y asiento contable automático.",
+          "Preview de tabla de amortización completa antes de confirmar.",
+          "Al confirmar: crédito, cuotas y asiento contable automático. Numeración 2026-000001.",
         ],
       },
       {
@@ -127,9 +133,9 @@ const SECTIONS: Section[] = [
         ],
       },
       {
-        title: "Trazabilidad",
+        title: "Trazabilidad e inmutabilidad",
         content: [
-          "Cada crédito guarda snapshot de política, plan, tasa mensual, tasa punitoria y cargos.",
+          "Cada crédito guarda snapshot de política, plan, tasa mensual, tasa punitoria y cargos al momento del otorgamiento.",
           "Cambios futuros en configuración no afectan créditos existentes.",
           "Botón 'Imprimir contrato' con tabla de amortización completa.",
         ],
@@ -149,16 +155,18 @@ const SECTIONS: Section[] = [
         content: [
           "Cheques → 'Nueva operación'.",
           "Cliente + uno o más cheques: banco, número, CUIT librador, vencimiento, valor nominal.",
-          "Preview automático: nominal, días, descuento, gastos y neto a acreditar.",
+          "Preview automático: nominal, días, descuento, gastos fijos/variables y neto a acreditar.",
           "Al confirmar: liquidación + asiento contable automático.",
+          "Botón 'Imprimir liquidación' disponible en el detalle.",
         ],
       },
       {
         title: "Seguimiento — Kanban",
         content: [
-          "Estados: recibido → en_cartera → depositado → acreditado.",
+          "Estados normales: recibido → en_cartera → depositado → acreditado.",
           "Estados de problema: rechazado, pre_judicial, judicial.",
           "Clic en cheque para ver detalle y cambiar estado.",
+          "Los cheques en estado judicial aparecen en la Bandeja Judicial.",
         ],
       },
     ],
@@ -176,7 +184,7 @@ const SECTIONS: Section[] = [
         content: [
           "Desde el detalle del crédito → cuota pendiente → botón 'Cobrar'.",
           "Seleccionar caja, sucursal y medio de pago.",
-          "El sistema calcula mora si la cuota está vencida.",
+          "El sistema calcula mora automáticamente si la cuota está vencida.",
           "Al confirmar genera asiento contable automático.",
         ],
       },
@@ -186,6 +194,32 @@ const SECTIONS: Section[] = [
           "Historial completo de cobros con capital, interés, mora y total.",
           "Botón 'Imprimir recibo' por cobro.",
           "Filtro por fecha y cliente.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "mora",
+    icon: <AlertTriangle className="h-5 w-5" />,
+    title: "Mora y gestión judicial",
+    badge: "Cobranzas",
+    badgeColor: "bg-red-100 text-red-800",
+    iconBg: "bg-red-100 text-red-600",
+    subsections: [
+      {
+        title: "Bandeja mora temprana",
+        content: [
+          "Acciones → 'Mora temprana': lista de créditos con cuotas vencidas recientes.",
+          "Permite gestión preventiva antes de que avance a estado judicial.",
+          "Visualización de días de mora, monto adeudado y datos de contacto del cliente.",
+        ],
+      },
+      {
+        title: "Bandeja judicial",
+        content: [
+          "Acciones → 'Judiciales': créditos y operaciones de cheques en estado judicial.",
+          "Concentra en un solo lugar todas las operaciones en instancia de cobro forzado.",
+          "Registro de gestiones y avance de estado desde la misma bandeja.",
         ],
       },
     ],
@@ -207,18 +241,19 @@ const SECTIONS: Section[] = [
         ],
       },
       {
-        title: "Nosis",
+        title: "Nosis — buró crediticio",
         content: [
           "Ficha del cliente → 'Consultar Nosis': score, situación BCRA, cheques rechazados, juicios.",
-          "Se guarda historial de consultas.",
-          "El score Nosis puede incluirse en la evaluación crediticia.",
+          "Se guarda historial de consultas Nosis.",
+          "El score Nosis puede incluirse como ítem en la evaluación crediticia.",
         ],
       },
       {
         title: "Líneas de crédito",
         content: [
-          "Cada cliente aprobado tiene límite mensual y total.",
+          "Cada cliente aprobado tiene límite mensual y total asignado.",
           "La ficha muestra: tier vigente, límite, consumido y disponible.",
+          "El sistema valida el cupo disponible al otorgar un nuevo crédito.",
         ],
       },
     ],
@@ -243,23 +278,23 @@ const SECTIONS: Section[] = [
         title: "Políticas crediticias",
         content: [
           "Agrupa condiciones para un segmento de clientes.",
-          "Define: legajo requerido, evaluación vigente, límites mensuales y totales.",
+          "Define: legajo requerido, evaluación vigente, límites mensuales y totales por tier.",
         ],
       },
       {
         title: "Planes de financiación",
         content: [
-          "Tasas por tramos de cuotas: 3 cuotas → 4.5%, 6 → 5.0%, 12 → 5.8%.",
+          "Tasas por tramos de cuotas: ej. 3 cuotas → 4.5%, 6 → 5.0%, 12 → 5.8%.",
           "Tasa punitoria mensual, cargo fijo y cargo variable %.",
-          "La tasa se aplica automáticamente al crear un crédito.",
+          "La tasa se resuelve automáticamente al crear un crédito según los tramos.",
         ],
       },
       {
-        title: "Cajas y usuarios",
+        title: "Cajas, sucursales y usuarios",
         content: [
           "Cajas: puntos de cobro físicos organizados por sucursal.",
+          "Multi-sucursal: cada sucursal puede tener varias cajas.",
           "Usuarios: altas y roles de operadores de la organización.",
-          "Plan de cuentas: árbol Rubros → Cuentas con el plan contable mínimo.",
         ],
       },
     ],
@@ -275,18 +310,20 @@ const SECTIONS: Section[] = [
       {
         title: "Asientos automáticos",
         content: [
-          "Otorgar crédito → asiento: Créditos / Intereses no devengados / Ventas financiadas.",
-          "Cobrar cuota → asiento: Caja / Créditos / Intereses ganados.",
+          "Otorgar crédito → asiento: Créditos / Intereses no devengados / Ventas financiadas (4 líneas balanceadas).",
+          "Cobrar cuota → asiento: Caja / Créditos / Intereses ganados / Devengamiento.",
           "Liquidar cheque → asiento: Cheques en cartera / Caja / Ingresos por descuento.",
-          "No hay ingreso manual de asientos.",
+          "No hay ingreso manual de asientos. Todos se generan automáticamente.",
+          "Los registros quedan en Firestore (fin_asientos) para auditoría externa.",
         ],
       },
       {
         title: "Plan de cuentas",
         content: [
-          "5 rubros: Activo, Pasivo, Patrimonio Neto, Ingresos, Egresos.",
-          "26 cuentas mínimas para financiera.",
-          "Botón 'Inicializar' carga el plan base automáticamente.",
+          "Árbol jerárquico: Rubros → Cuentas. Naturaleza: Activo / Pasivo / Patrimonio / Resultados.",
+          "5 rubros base con 26 cuentas mínimas para financiera.",
+          "Botón 'Inicializar plan' carga el plan base automáticamente.",
+          "Configuración del plugin: mapeo de cuentas por tipo de movimiento.",
         ],
       },
     ],
@@ -302,10 +339,11 @@ const SECTIONS: Section[] = [
       {
         title: "Reportes disponibles",
         content: [
-          "Cartera activa: créditos vigentes con capital pendiente y próximas cuotas.",
-          "Líneas consumidas: % de uso del cupo por cliente.",
+          "Cartera activa: créditos vigentes con capital pendiente, próximas cuotas y totales de cartera.",
+          "Líneas consumidas: % de uso del cupo mensual y total por cliente.",
           "Cartera de cheques: por estado, banco y vencimiento.",
-          "Cobros del período: capital, interés y mora.",
+          "Cheques rechazados: gastos, estado judicial.",
+          "Cobros del período: capital, interés y mora cobrados.",
         ],
       },
     ],
@@ -321,7 +359,7 @@ const SECTIONS: Section[] = [
       {
         title: "Documentos imprimibles",
         content: [
-          "Contrato de crédito: ficha del crédito → 'Imprimir contrato'.",
+          "Contrato de crédito: ficha del crédito → 'Imprimir contrato' (tabla de amortización completa).",
           "Recibo de cobro: botón en cada cobro → nueva pestaña.",
           "Liquidación de cheque: detalle de la operación → 'Imprimir liquidación'.",
           "Usar Ctrl+P para imprimir o guardar como PDF.",
@@ -420,7 +458,7 @@ export default function ManualSistemasPage() {
       </div>
 
       <p className="text-center text-xs text-slate-400">
-        PrestaloApp — Plataforma financiera multi-tenant · OLA 9
+        PrestaloApp — Plataforma financiera multi-tenant · v2026.03
       </p>
     </div>
   );
