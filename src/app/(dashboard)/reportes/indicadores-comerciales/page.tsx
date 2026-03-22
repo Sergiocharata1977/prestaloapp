@@ -40,8 +40,10 @@ function ars(v: number) {
   });
 }
 
-function currentMonth(): string {
+/** Mes de inicio N meses hacia atrás (para ver histórico) */
+function fromMonthBack(months: number): string {
   const d = new Date();
+  d.setMonth(d.getMonth() - months + 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
@@ -122,7 +124,7 @@ export default function IndicadoresComercialesPage() {
     setError(null);
     try {
       const params = new URLSearchParams({
-        fromMonth: currentMonth(),
+        fromMonth: fromMonthBack(parseInt(months)),
         months,
       });
       const res = await apiFetch(
