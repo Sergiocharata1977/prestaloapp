@@ -37,16 +37,12 @@ function toIsoDate(value: string | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function buildClaims(role: SuperAdminRole, organizationId: string | null) {
-  if (role === "super_admin") {
-    return { admin: true, role, organizationId: null };
-  }
-
-  return {
-    admin: role === "admin",
-    role,
-    organizationId,
-  };
+function buildClaims(role: SuperAdminRole, organizationId: string | null, capabilities: string[] = []) {
+  const base =
+    role === "super_admin"
+      ? { admin: true, role, organizationId: null }
+      : { admin: role === "admin", role, organizationId };
+  return capabilities.length > 0 ? { ...base, capabilities } : base;
 }
 
 async function buildOrganizationsMap() {
@@ -77,6 +73,10 @@ function toSuperAdminUser(
       ? claims.organizationId
       : null;
 
+  const capabilities = Array.isArray(claims.capabilities)
+    ? (claims.capabilities as unknown[]).filter((c): c is string => typeof c === "string")
+    : [];
+
   return {
     id: user.uid,
     uid: user.uid,
@@ -89,6 +89,7 @@ function toSuperAdminUser(
     createdAt: toIsoDate(user.metadata.creationTime),
     lastSignInAt: toIsoDate(user.metadata.lastSignInTime),
     admin: claims.admin === true,
+    capabilities,
   };
 }
 
@@ -103,6 +104,9 @@ function parsePatchBody(body: unknown) {
   const organizationId = parseOrganizationId(payload.organizationId);
   const disabled = payload.disabled;
   const resetPassword = payload.resetPassword;
+  const capabilities = Array.isArray(payload.capabilities)
+    ? (payload.capabilities as unknown[]).filter((c): c is string => typeof c === "string")
+    : undefined;
 
   if (role !== undefined && !isSuperAdminRole(role)) {
     return { error: "Rol invalido" as const };
@@ -134,6 +138,7 @@ function parsePatchBody(body: unknown) {
       organizationId: role === "super_admin" ? null : organizationId,
       disabled: disabled as boolean | undefined,
       resetPassword: resetPassword === true,
+      capabilities,
     },
   };
 }
@@ -169,7 +174,7 @@ export const PATCH = withAuth(async (request, context) => {
       buildOrganizationsMap(),
     ]);
 
-    const { role, displayName, organizationId, disabled, resetPassword } = parsed.value;
+    const { role, displayName, organizationId, disabled, resetPassword, capabilities } = parsed.value;
 
     if (organizationId && !organizations.has(organizationId)) {
       return NextResponse.json(
@@ -192,8 +197,12 @@ export const PATCH = withAuth(async (request, context) => {
       await auth.updateUser(uid, updateUserPayload);
     }
 
-    if (role !== undefined) {
-      await auth.setCustomUserClaims(uid, buildClaims(role, organizationId));
+    if (role !== undefined || capabilities !== undefined) {
+      const currentClaims = currentUser.customClaims ?? {};
+      const effectiveRole = role ?? (isSuperAdminRole(currentClaims.role) ? currentClaims.role : "operador");
+      const effectiveOrgId = role === "super_admin" ? null : (organizationId ?? (typeof currentClaims.organizationId === "string" ? currentClaims.organizationId : null));
+      const effectiveCaps = capabilities ?? (Array.isArray(currentClaims.capabilities) ? currentClaims.capabilities as string[] : []);
+      await auth.setCustomUserClaims(uid, buildClaims(effectiveRole, effectiveOrgId, effectiveCaps));
     }
 
     let passwordResetLink: string | null = null;

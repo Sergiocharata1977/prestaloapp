@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart2,
   BookOpen,
   BookOpenText,
   BriefcaseBusiness,
@@ -58,8 +59,9 @@ const configItems = [
 ];
 
 const reportesItems = [
-  { href: "/reportes",                       label: "Operativos",      icon: FileText },
-  { href: "/reportes/proyeccion-cobranzas",  label: "Proyec. cobros",  icon: CalendarDays },
+  { href: "/reportes",                              label: "Operativos",      icon: FileText,    capability: undefined },
+  { href: "/reportes/proyeccion-cobranzas",         label: "Proyec. cobros",  icon: CalendarDays, capability: "proyeccion_cobranzas" },
+  { href: "/reportes/indicadores-comerciales",      label: "Indicadores",     icon: BarChart2,    capability: "analytics_comercial" },
 ];
 
 const bottomItems = [
@@ -114,13 +116,21 @@ function CollapsibleSection({
 }: {
   label: string;
   icon: React.ElementType;
-  items: { href: string; label: string; icon: React.ElementType }[];
+  items: { href: string; label: string; icon: React.ElementType; capability?: string }[];
   pathname: string;
 }) {
-  const isActive = items.some(
+  const { capabilities } = useAuth();
+
+  const visibleItems = items.filter(
+    (item) => !item.capability || capabilities.includes(item.capability)
+  );
+
+  const isActive = visibleItems.some(
     (item) => pathname === item.href || pathname.startsWith(item.href)
   );
   const [open, setOpen] = useState(isActive);
+
+  if (visibleItems.length === 0) return null;
 
   return (
     <div className="mt-1">
@@ -147,7 +157,7 @@ function CollapsibleSection({
 
       {open && (
         <div className="ml-3 mt-1 grid gap-1 border-l border-white/10 pl-3">
-          {items.map(({ href, icon, label: itemLabel }) => (
+          {visibleItems.map(({ href, icon, label: itemLabel }) => (
             <NavLink key={href} href={href} icon={icon} label={itemLabel} pathname={pathname} />
           ))}
         </div>

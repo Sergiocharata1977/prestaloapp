@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Organization, SuperAdminRole, SuperAdminUser } from "@/types/super-admin";
+import { PLUGIN_CAPABILITIES } from "@/lib/capabilities";
 
 type UsersResponse = {
   error?: string;
@@ -99,6 +100,7 @@ export default function SuperAdminUsersPage() {
   const [editRole, setEditRole] = useState<SuperAdminRole>("operador");
   const [editOrganizationId, setEditOrganizationId] = useState<string>("none");
   const [editDisabled, setEditDisabled] = useState(false);
+  const [editCapabilities, setEditCapabilities] = useState<string[]>([]);
 
   useEffect(() => {
     void loadData();
@@ -110,6 +112,7 @@ export default function SuperAdminUsersPage() {
     setEditRole(user.role ?? "operador");
     setEditOrganizationId(user.organizationId ?? "none");
     setEditDisabled(user.disabled);
+    setEditCapabilities(user.capabilities ?? []);
     setResetLink(null);
     setError(null);
     setSuccess(null);
@@ -171,6 +174,7 @@ export default function SuperAdminUsersPage() {
           role: editRole,
           organizationId: editRole === "super_admin" ? null : editOrganizationId,
           disabled: editDisabled,
+          capabilities: editCapabilities,
         }),
       });
       const data = (await response.json()) as UpdateResponse;
@@ -540,6 +544,35 @@ export default function SuperAdminUsersPage() {
                   </Select>
                 </div>
               </div>
+
+              {editRole !== "super_admin" && (
+                <div className="space-y-2">
+                  <Label>Plugins activos</Label>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    {PLUGIN_CAPABILITIES.map((cap) => {
+                      const checked = editCapabilities.includes(cap.value);
+                      return (
+                        <label key={cap.value} className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+                            checked={checked}
+                            onChange={() =>
+                              setEditCapabilities((prev) =>
+                                checked ? prev.filter((c) => c !== cap.value) : [...prev, cap.value]
+                              )
+                            }
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-slate-800">{cap.label}</p>
+                            <p className="text-xs text-slate-500">{cap.description}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="grid gap-4 rounded-2xl bg-slate-50 p-4 md:grid-cols-3">
                 <div>

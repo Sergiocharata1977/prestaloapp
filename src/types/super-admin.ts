@@ -41,6 +41,7 @@ export type SuperAdminUser = {
   createdAt: string | null;
   lastSignInAt: string | null;
   admin: boolean;
+  capabilities: string[];
 };
 
 export type DemoRequest = {

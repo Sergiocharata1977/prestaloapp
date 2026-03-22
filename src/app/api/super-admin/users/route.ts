@@ -36,16 +36,12 @@ function toIsoDate(value: string | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function buildClaims(role: SuperAdminRole, organizationId: string | null) {
-  if (role === "super_admin") {
-    return { admin: true, role, organizationId: null };
-  }
-
-  return {
-    admin: role === "admin",
-    role,
-    organizationId,
-  };
+function buildClaims(role: SuperAdminRole, organizationId: string | null, capabilities: string[] = []) {
+  const base =
+    role === "super_admin"
+      ? { admin: true, role, organizationId: null }
+      : { admin: role === "admin", role, organizationId };
+  return capabilities.length > 0 ? { ...base, capabilities } : base;
 }
 
 function parseOrganizationId(value: unknown) {
@@ -145,6 +141,10 @@ function toSuperAdminUser(
       ? claims.organizationId
       : null;
 
+  const capabilities = Array.isArray(claims.capabilities)
+    ? (claims.capabilities as unknown[]).filter((c): c is string => typeof c === "string")
+    : [];
+
   return {
     id: user.uid,
     uid: user.uid,
@@ -157,6 +157,7 @@ function toSuperAdminUser(
     createdAt: toIsoDate(user.metadata.creationTime),
     lastSignInAt: toIsoDate(user.metadata.lastSignInTime),
     admin: claims.admin === true,
+    capabilities,
   };
 }
 
