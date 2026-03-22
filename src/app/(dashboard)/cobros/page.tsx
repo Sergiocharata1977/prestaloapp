@@ -45,10 +45,13 @@ const columns: Column<FinCobro>[] = [
 
 export default function CobrosPage() {
   const router = useRouter();
-  const today = new Date().toISOString().slice(0, 10);
+  const firstDayOfMonth = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  })();
   const [cobros, setCobros] = useState<FinCobro[]>([]);
   const [loading, setLoading] = useState(true);
-  const [desde, setDesde] = useState(today);
+  const [desde, setDesde] = useState(firstDayOfMonth);
 
   useEffect(() => {
     setLoading(true);
