@@ -432,3 +432,4 @@ Ver archivos individuales en `reports/` para detalles de diseño:
 | 58 | `58_ANALISIS_VERIFICACION_IDENTIDAD_WHATSAPP_PRESTALOAPP_2026-03-19.md` | Verificación de identidad vía WhatsApp | Pendiente |
 | 59 | `59_DISENO_TECNICO_AUTORIZACION_WHATSAPP_PRESTALOAPP_2026-03-19.md` | Diseño técnico: autorización de operaciones vía WhatsApp | Pendiente |
 | 60 | `60_SISTEMA_PLUGINS_EXTENSIONES_PRESTALOAPP_2026-03-19.md` | Sistema de plugins/extensiones multi-tenant | Pendiente |
+| 61 | `61_PLAN_PROYECCION_COBRANZAS_2026-03-22.md` | OLA 10 — Proyección de cobranzas / flujo de fondos esperado (tabla matriz mensual) | Pendiente |
