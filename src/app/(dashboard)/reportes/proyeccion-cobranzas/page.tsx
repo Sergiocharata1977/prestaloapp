@@ -9,7 +9,19 @@ import {
   AlertTriangle,
   CircleDollarSign,
   Clock,
+  X,
+  Loader2,
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -23,6 +35,7 @@ import { apiFetch } from "@/lib/apiFetch";
 import type {
   ProyeccionCobranzasResponse,
   ProyeccionAgruparPor,
+  ProyeccionDetalleResponse,
 } from "@/types/fin-proyeccion-cobranzas";
 
 // ---------------------------------------------------------------------------
@@ -98,14 +111,12 @@ function exportarExcel(data: ProyeccionCobranzasResponse) {
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
 
-  // Ancho de columnas
   ws["!cols"] = [
     { wch: 28 },
     ...data.columns.map(() => ({ wch: 14 })),
     { wch: 14 },
   ];
 
-  // Formato número para todas las celdas numéricas
   const numFmt = '#,##0.00';
   const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1');
   for (let R = 1; R <= range.e.r; R++) {
@@ -123,7 +134,7 @@ function exportarExcel(data: ProyeccionCobranzasResponse) {
 }
 
 // ---------------------------------------------------------------------------
-// Componente KPI Card
+// KPI Card
 // ---------------------------------------------------------------------------
 
 function KpiCard({
@@ -162,10 +173,247 @@ function KpiCard({
 }
 
 // ---------------------------------------------------------------------------
+// Tooltip del gráfico
+// ---------------------------------------------------------------------------
+
+function BarTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: { value: number; payload: { isVencido?: boolean } }[];
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-white px-3 py-2 text-sm shadow-md">
+      <p className="font-medium text-slate-700">{label}</p>
+      <p className="text-slate-500">
+        Total:{" "}
+        <span className="font-semibold text-slate-900">{ars(payload[0].value)}</span>
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Gráfico de barras
+// ---------------------------------------------------------------------------
+
+function GraficoBarras({ data }: { data: ProyeccionCobranzasResponse }) {
+  const chartData = data.columns.map((col) => ({
+    label: col.label,
+    total: data.totalsByMonth[col.key] ?? 0,
+    isVencido: col.isVencido ?? false,
+  }));
+
+  const maxVal = Math.max(...chartData.map((d) => d.total), 1);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="mb-4 text-sm font-semibold text-slate-700">
+        Cobranza proyectada por mes
+      </h2>
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 11, fill: "#94a3b8" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            domain={[0, maxVal * 1.1]}
+            tickFormatter={(v: number) =>
+              v >= 1_000_000
+                ? `${(v / 1_000_000).toFixed(1)}M`
+                : v >= 1_000
+                ? `${(v / 1_000).toFixed(0)}k`
+                : String(v)
+            }
+            tick={{ fontSize: 11, fill: "#94a3b8" }}
+            axisLine={false}
+            tickLine={false}
+            width={56}
+          />
+          <Tooltip content={<BarTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+          <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+            {chartData.map((entry, idx) => (
+              <Cell
+                key={idx}
+                fill={entry.isVencido ? "#fca5a5" : "#f59e0b"}
+              />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Drawer de detalle (drill-down)
+// ---------------------------------------------------------------------------
+
+interface DrilldownTarget {
+  groupId: string;
+  groupLabel: string;
+  monthKey: string;
+  monthLabel: string;
+  agruparPor: ProyeccionAgruparPor;
+  amount: number;
+}
+
+function DetalleDrawer({
+  target,
+  onClose,
+}: {
+  target: DrilldownTarget;
+  onClose: () => void;
+}) {
+  const [detalle, setDetalle] = useState<ProyeccionDetalleResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    setDetalle(null);
+    const params = new URLSearchParams({
+      groupId: target.groupId,
+      monthKey: target.monthKey,
+      groupLabel: target.groupLabel,
+      agruparPor: target.agruparPor,
+    });
+    apiFetch(`/api/fin/reportes/proyeccion-cobranzas/detalle?${params}`)
+      .then((r) => r.json())
+      .then((d) => setDetalle(d as ProyeccionDetalleResponse))
+      .finally(() => setLoading(false));
+  }, [target]);
+
+  return (
+    <>
+      {/* Overlay */}
+      <div
+        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Panel */}
+      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between border-b px-6 py-4">
+          <div>
+            <p className="text-xs text-slate-500">Detalle de cobranza</p>
+            <h3 className="text-base font-semibold text-slate-900">
+              {target.groupLabel}
+            </h3>
+            <p className="text-sm text-slate-500">{target.monthLabel}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-lg font-semibold tabular-nums text-amber-700">
+              {ars(target.amount)}
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex h-40 items-center justify-center gap-2 text-sm text-slate-400">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Cargando...
+            </div>
+          ) : !detalle?.cuotas?.length ? (
+            <div className="flex h-40 items-center justify-center text-sm text-slate-400">
+              Sin cuotas en este período
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-50">
+                <tr className="text-xs text-slate-500">
+                  <th className="px-5 py-3 text-left font-medium">Cliente</th>
+                  <th className="px-3 py-3 text-center font-medium">Cuota</th>
+                  <th className="px-3 py-3 text-center font-medium">Venc.</th>
+                  <th className="px-3 py-3 text-right font-medium">Total</th>
+                  <th className="px-3 py-3 text-right font-medium">Mora</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detalle.cuotas.map((c) => (
+                  <tr key={c.cuotaId} className="border-t hover:bg-slate-50">
+                    <td className="px-5 py-2.5">
+                      <p className="font-medium text-slate-800 leading-tight">
+                        {c.clienteNombre}
+                      </p>
+                      <p className="text-xs text-slate-400">{c.cuit}</p>
+                    </td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-slate-500">
+                      #{c.numeroCuota}
+                    </td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-slate-500 whitespace-nowrap">
+                      {c.fechaVencimiento}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-medium">
+                      {ars(c.total)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {c.diasMora !== null ? (
+                        <span
+                          className={
+                            c.diasMora > 30
+                              ? "font-semibold text-red-600"
+                              : "text-orange-500"
+                          }
+                        >
+                          {c.diasMora}d
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="border-t-2">
+                <tr className="bg-slate-50 font-semibold">
+                  <td className="px-5 py-3 text-slate-700" colSpan={3}>
+                    Total ({detalle.cuotas.length} cuotas)
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums">
+                    {ars(detalle.total)}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Tabla Matriz
 // ---------------------------------------------------------------------------
 
-function TablaMatriz({ data }: { data: ProyeccionCobranzasResponse }) {
+function TablaMatriz({
+  data,
+  agruparPor,
+  onCellClick,
+}: {
+  data: ProyeccionCobranzasResponse;
+  agruparPor: ProyeccionAgruparPor;
+  onCellClick: (target: DrilldownTarget) => void;
+}) {
   if (data.rows.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
@@ -183,14 +431,12 @@ function TablaMatriz({ data }: { data: ProyeccionCobranzasResponse }) {
           {/* ── ENCABEZADO ── */}
           <thead>
             <tr className="bg-slate-800 text-white">
-              {/* Col conceptos — sticky */}
               <th
                 className="sticky left-0 z-20 bg-slate-800 px-4 py-3 text-left font-semibold min-w-[200px] border-r border-slate-600"
                 style={{ minWidth: 200 }}
               >
                 Concepto
               </th>
-              {/* Columnas de meses */}
               {data.columns.map((col) => (
                 <th
                   key={col.key}
@@ -203,7 +449,6 @@ function TablaMatriz({ data }: { data: ProyeccionCobranzasResponse }) {
                   {col.label}
                 </th>
               ))}
-              {/* Col total */}
               <th
                 className="px-4 py-3 text-right font-semibold whitespace-nowrap min-w-[140px] bg-slate-900"
                 style={{ minWidth: 140 }}
@@ -224,7 +469,6 @@ function TablaMatriz({ data }: { data: ProyeccionCobranzasResponse }) {
                     : "bg-slate-50 hover:bg-amber-50 transition-colors"
                 }
               >
-                {/* Label concepto — sticky */}
                 <td
                   className="sticky left-0 z-10 bg-inherit px-4 py-2.5 font-medium text-slate-800 border-r border-slate-200 whitespace-nowrap"
                   style={{ minWidth: 200 }}
@@ -234,21 +478,32 @@ function TablaMatriz({ data }: { data: ProyeccionCobranzasResponse }) {
                     ({row.cuotasTotal} cuotas)
                   </span>
                 </td>
-                {/* Celdas de meses */}
                 {data.columns.map((col) => {
                   const cell = row.values.find((v) => v.monthKey === col.key);
                   const amount = cell?.amount ?? 0;
                   return (
                     <td
                       key={col.key}
+                      onClick={() => {
+                        if (amount > 0) {
+                          onCellClick({
+                            groupId: row.id,
+                            groupLabel: row.label,
+                            monthKey: col.key,
+                            monthLabel: col.label,
+                            agruparPor,
+                            amount,
+                          });
+                        }
+                      }}
                       className={
                         "px-4 py-2.5 text-right font-mono border-r border-slate-100 " +
                         (col.isVencido
                           ? amount > 0
-                            ? "text-red-700 bg-red-50"
+                            ? "text-red-700 bg-red-50 cursor-pointer hover:bg-red-100"
                             : "text-slate-300 bg-red-50"
                           : amount > 0
-                          ? "text-slate-800"
+                          ? "text-slate-800 cursor-pointer hover:bg-amber-50"
                           : "text-slate-300")
                       }
                       style={{ minWidth: 130 }}
@@ -257,7 +512,6 @@ function TablaMatriz({ data }: { data: ProyeccionCobranzasResponse }) {
                     </td>
                   );
                 })}
-                {/* Total fila */}
                 <td
                   className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900 bg-slate-50 border-l border-slate-200"
                   style={{ minWidth: 140 }}
@@ -315,31 +569,28 @@ export default function ProyeccionCobranzasPage() {
   const [pendingFiltros, setPendingFiltros] = useState<Filtros>(defaultFiltros);
   const [data, setData] = useState<ProyeccionCobranzasResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [drilldown, setDrilldown] = useState<DrilldownTarget | null>(null);
 
-  const fetchData = useCallback(
-    async (f: Filtros) => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams({
-          fromMonth: currentMonth(),
-          months: f.months,
-          agruparPor: f.agruparPor,
-          incluirVencidas: String(f.incluirVencidas),
-          ...(f.tipoClienteId ? { tipoClienteId: f.tipoClienteId } : {}),
-          ...(f.sucursalId ? { sucursalId: f.sucursalId } : {}),
-        });
-        const res = await apiFetch(`/api/fin/reportes/proyeccion-cobranzas?${params}`);
-        if (res.ok) {
-          setData((await res.json()) as ProyeccionCobranzasResponse);
-        }
-      } finally {
-        setLoading(false);
+  const fetchData = useCallback(async (f: Filtros) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        fromMonth: currentMonth(),
+        months: f.months,
+        agruparPor: f.agruparPor,
+        incluirVencidas: String(f.incluirVencidas),
+        ...(f.tipoClienteId ? { tipoClienteId: f.tipoClienteId } : {}),
+        ...(f.sucursalId ? { sucursalId: f.sucursalId } : {}),
+      });
+      const res = await apiFetch(`/api/fin/reportes/proyeccion-cobranzas?${params}`);
+      if (res.ok) {
+        setData((await res.json()) as ProyeccionCobranzasResponse);
       }
-    },
-    []
-  );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // Carga inicial
   useEffect(() => {
     void fetchData(defaultFiltros);
   }, [fetchData]);
@@ -362,16 +613,14 @@ export default function ProyeccionCobranzasPage() {
             Proyección de cobranzas
           </h1>
           <p className="max-w-3xl text-sm leading-6 text-slate-600">
-            Flujo de fondos esperado mes a mes según cuotas pendientes. Las filas son
-            conceptos agrupados; las columnas, los próximos meses. El total de cada
-            columna representa el monto esperado a cobrar en ese mes.
+            Flujo de fondos esperado mes a mes según cuotas pendientes. Hacé clic en
+            cualquier celda para ver el detalle de cuotas individuales.
           </p>
         </div>
       </section>
 
       {/* ── Filtros ── */}
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        {/* Meses a proyectar */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">Meses a proyectar</label>
           <Select
@@ -390,7 +639,6 @@ export default function ProyeccionCobranzasPage() {
           </Select>
         </div>
 
-        {/* Agrupar por */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">Agrupar por</label>
           <Select
@@ -412,7 +660,6 @@ export default function ProyeccionCobranzasPage() {
           </Select>
         </div>
 
-        {/* Incluir vencidas */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">Vencidas impagas</label>
           <Select
@@ -431,7 +678,6 @@ export default function ProyeccionCobranzasPage() {
           </Select>
         </div>
 
-        {/* Botón aplicar */}
         <button
           type="button"
           onClick={handleAplicar}
@@ -441,7 +687,6 @@ export default function ProyeccionCobranzasPage() {
           {loading ? "Calculando…" : "Aplicar"}
         </button>
 
-        {/* Spacer + export */}
         <div className="ml-auto">
           <button
             type="button"
@@ -486,7 +731,7 @@ export default function ProyeccionCobranzasPage() {
             <KpiCard
               label="Próximos 3 meses"
               value={kpis ? ars(kpis.proximos3Meses) : "—"}
-              detail={kpis ? `Prom. mensual ${kpis ? ars(kpis.promedioMensual) : "—"}` : undefined}
+              detail={kpis ? `Prom. mensual ${ars(kpis.promedioMensual)}` : undefined}
               icon={Clock}
             />
             <KpiCard
@@ -499,6 +744,16 @@ export default function ProyeccionCobranzasPage() {
           </>
         )}
       </section>
+
+      {/* ── Gráfico de barras ── */}
+      {!loading && data && data.columns.length > 0 && (
+        <GraficoBarras data={data} />
+      )}
+      {loading && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="h-[220px] animate-pulse rounded-lg bg-slate-100" />
+        </div>
+      )}
 
       {/* ── Info de agrupación activa ── */}
       {data && !loading && (
@@ -532,8 +787,17 @@ export default function ProyeccionCobranzasPage() {
           </div>
         </div>
       ) : data ? (
-        <TablaMatriz data={data} />
+        <TablaMatriz
+          data={data}
+          agruparPor={filtros.agruparPor}
+          onCellClick={setDrilldown}
+        />
       ) : null}
+
+      {/* ── Drawer drill-down ── */}
+      {drilldown && (
+        <DetalleDrawer target={drilldown} onClose={() => setDrilldown(null)} />
+      )}
     </div>
   );
 }

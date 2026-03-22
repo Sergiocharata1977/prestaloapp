@@ -62,3 +62,29 @@ export interface ProyeccionCobranzasResponse {
   generatedAt: string;
   params: ProyeccionCobranzasParams;
 }
+
+// ---------------------------------------------------------------------------
+// Detalle drill-down
+// ---------------------------------------------------------------------------
+
+export interface ProyeccionDetalleCuota {
+  cuotaId: string;
+  clienteId: string;
+  clienteNombre: string;
+  cuit: string;
+  creditoId: string;
+  numeroCuota: number;
+  fechaVencimiento: string;
+  capital: number;
+  interes: number;
+  total: number;
+  estado: 'pendiente' | 'vencida';
+  diasMora: number | null;
+}
+
+export interface ProyeccionDetalleResponse {
+  cuotas: ProyeccionDetalleCuota[];
+  total: number;
+  monthKey: string;
+  groupLabel: string;
+}
