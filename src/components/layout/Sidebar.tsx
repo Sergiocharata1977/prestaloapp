@@ -18,6 +18,7 @@ import {
   Layers,
   LayoutDashboard,
   MonitorSmartphone,
+  Package,
   Scale,
   Settings,
   ShoppingBag,
@@ -52,12 +53,13 @@ const accionesItems = [
 ];
 
 const configItems = [
-  { href: "/tipos-cliente",         label: "Tipos cliente",   icon: Users },
-  { href: "/politicas-crediticias", label: "Politicas",       icon: Scale },
-  { href: "/planes-financiacion",   label: "Planes",          icon: BookOpenText },
-  { href: "/cajas",                 label: "Cajas",           icon: BriefcaseBusiness },
-  { href: "/usuarios",              label: "Usuarios",        icon: UserCircle2 },
-  { href: "/plan-cuentas",          label: "Plan de Cuentas", icon: BookOpen },
+  { href: "/tipos-cliente",          label: "Tipos cliente",   icon: Users },
+  { href: "/politicas-crediticias",  label: "Politicas",       icon: Scale },
+  { href: "/planes-financiacion",    label: "Planes",          icon: BookOpenText },
+  { href: "/cajas",                  label: "Cajas",           icon: BriefcaseBusiness },
+  { href: "/usuarios",               label: "Usuarios",        icon: UserCircle2 },
+  { href: "/plan-cuentas",           label: "Plan de Cuentas", icon: BookOpen },
+  { href: "/configuracion/plugins",  label: "Plugins",         icon: Package },
 ];
 
 const reportesItems = [
