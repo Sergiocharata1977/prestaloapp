@@ -1,5 +1,7 @@
 import { withAuth } from '@/lib/api/withAuth';
 import { CreditoService } from '@/services/CreditoService';
+import { getAdminFirestore } from '@/firebase/admin';
+import { FIN_COLLECTIONS } from '@/firebase/collections';
 import type {
   FinCreditoCreateInput,
   FinCreditoEstado,
@@ -18,7 +20,7 @@ const creditoEstadoSchema = z.enum([
 ]);
 
 const creditoCreateSchema = z.object({
-  sucursal_id: z.string().trim().min(1, 'sucursal_id requerido'),
+  sucursal_id: z.string().trim().optional().default(''),
   cliente_id: z.string().trim().min(1, 'cliente_id requerido'),
   tipo_cliente_id: z.string().trim().min(1).optional(),
   tipo_operacion: z
@@ -130,8 +132,28 @@ export const POST = withAuth(async (request: NextRequest, _context, auth) => {
     }
 
     const body = creditoCreateSchema.parse(json);
+
+    // Resolver sucursal: si viene vacía, usar la primera activa de la org
+    let sucursalId = body.sucursal_id ?? '';
+    if (!sucursalId) {
+      const db = getAdminFirestore();
+      const snap = await db
+        .collection(FIN_COLLECTIONS.sucursales(auth.organizationId))
+        .where('activa', '==', true)
+        .limit(1)
+        .get();
+      if (snap.empty) {
+        return NextResponse.json(
+          { error: 'No hay sucursales configuradas. Creá al menos una antes de otorgar créditos.' },
+          { status: 400 }
+        );
+      }
+      sucursalId = snap.docs[0].id;
+    }
+
     const payload: FinCreditoCreateInput = {
       ...body,
+      sucursal_id: sucursalId,
       sistema: parseSistema(body.sistema),
       tipo_operacion: parseTipoOperacion(body.tipo_operacion),
     };

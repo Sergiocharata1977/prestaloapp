@@ -15,6 +15,8 @@ import type { FinSucursal } from "@/types/fin-sucursal";
 import type { TablaAmortizacion } from "@/services/AmortizationService";
 import { resolverTasa } from "@/lib/fin/planUtils";
 import { apiFetch } from "@/lib/apiFetch";
+import { useAuth } from "@/hooks/useAuth";
+import { CAPABILITIES } from "@/lib/capabilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,7 +37,7 @@ import {
 import { AmortizationPreviewTable } from "@/components/fin/AmortizationPreviewTable";
 
 const schema = z.object({
-  sucursal_id: z.string().min(1, "Selecciona una sucursal"),
+  sucursal_id: z.string(),
   cliente_id: z.string().min(1, "Selecciona un cliente"),
   politica_id: z.string().min(1, "Selecciona una politica"),
   plan_financiacion_id: z.string().optional(),
@@ -107,6 +109,8 @@ export function NuevoCreditoDialog({
   onSuccess,
 }: Props) {
   const router = useRouter();
+  const { capabilities } = useAuth();
+  const hasSucursalesMulti = capabilities.includes(CAPABILITIES.SUCURSALES_MULTI);
   const [step, setStep] = useState<1 | 2>(1);
   const [sucursales, setSucursales] = useState<FinSucursal[]>([]);
   const [planes, setPlanes] = useState<FinPlanFinanciacion[]>([]);
@@ -135,6 +139,7 @@ export function NuevoCreditoDialog({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
+      sucursal_id: "",
       sistema: "frances",
       cliente_id: preselectedClienteId ?? "",
       politica_id: "",
@@ -204,6 +209,25 @@ export function NuevoCreditoDialog({
     if (!open || !preselectedClienteId) return;
     void loadClienteContext(preselectedClienteId);
   }, [open, preselectedClienteId]);
+
+  // Auto-seleccionar primera sucursal si no tiene plugin multi-sucursal
+  useEffect(() => {
+    if (hasSucursalesMulti || sucursales.length === 0) return;
+    const current = getValues("sucursal_id");
+    if (!current) setValue("sucursal_id", sucursales[0].id);
+  }, [sucursales, hasSucursalesMulti, getValues, setValue]);
+
+  // Auto-seleccionar política cuando el cliente tiene un único match
+  useEffect(() => {
+    if (!clienteSeleccionado?.tipo_cliente_id || politicas.length === 0) return;
+    const matching = politicas.filter(
+      (p) => p.tipo_cliente_id === clienteSeleccionado.tipo_cliente_id
+    );
+    if (matching.length === 1) {
+      setValue("politica_id", matching[0].id, { shouldValidate: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteSeleccionado?.tipo_cliente_id, politicas, setValue]);
 
   const handleClienteSearch = (query: string) => {
     setClienteSearch(query);
@@ -481,27 +505,29 @@ export function NuevoCreditoDialog({
         {step === 1 && (
           <div className="grid gap-6 lg:grid-cols-2">
             <form onSubmit={goToStep2} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Sucursal</Label>
-                <Select
-                  value={currentValues.sucursal_id}
-                  onValueChange={(value) => setValue("sucursal_id", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona una sucursal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sucursales.map((sucursal) => (
-                      <SelectItem key={sucursal.id} value={sucursal.id}>
-                        {sucursal.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.sucursal_id && (
-                  <p className="text-xs text-red-600">{errors.sucursal_id.message}</p>
-                )}
-              </div>
+              {hasSucursalesMulti && (
+                <div className="space-y-2">
+                  <Label>Sucursal</Label>
+                  <Select
+                    value={currentValues.sucursal_id}
+                    onValueChange={(value) => setValue("sucursal_id", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona una sucursal" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sucursales.map((sucursal) => (
+                        <SelectItem key={sucursal.id} value={sucursal.id}>
+                          {sucursal.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.sucursal_id && (
+                    <p className="text-xs text-red-600">{errors.sucursal_id.message}</p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Cliente</Label>
@@ -544,22 +570,55 @@ export function NuevoCreditoDialog({
               </div>
 
               <div className="space-y-2">
-                <Label>Politica crediticia</Label>
-                <Select
-                  value={currentValues.politica_id}
-                  onValueChange={(value) => setValue("politica_id", value, { shouldValidate: true })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona una politica" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {politicasFiltradas.map((politica) => (
-                      <SelectItem key={politica.id} value={politica.id}>
-                        {politica.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Política crediticia</Label>
+                {politicasFiltradas.length === 1 && currentValues.politica_id ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+                    <ShieldCheck className="h-4 w-4 shrink-0" />
+                    <span>
+                      <span className="font-medium">{politicasFiltradas[0].nombre}</span>
+                      <span className="ml-1 text-green-600">(asignada por segmento)</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="ml-auto text-xs text-green-600 underline hover:text-green-800"
+                      onClick={() => setValue("politica_id", "", { shouldValidate: true })}
+                    >
+                      cambiar
+                    </button>
+                  </div>
+                ) : (
+                  <Select
+                    value={currentValues.politica_id}
+                    onValueChange={(value) => setValue("politica_id", value, { shouldValidate: true })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={
+                        !clienteSeleccionado
+                          ? "Seleccioná un cliente primero"
+                          : politicasFiltradas.length === 0
+                          ? "Sin políticas para este segmento"
+                          : "Selecciona una política"
+                      } />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {politicasFiltradas.map((politica) => (
+                        <SelectItem key={politica.id} value={politica.id}>
+                          {politica.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {!clienteSeleccionado && (
+                  <p className="text-xs text-slate-400">
+                    Las políticas se filtran según el segmento del cliente.
+                  </p>
+                )}
+                {clienteSeleccionado && politicasFiltradas.length === 0 && (
+                  <p className="text-xs text-amber-600">
+                    No hay políticas activas para el segmento de este cliente.
+                  </p>
+                )}
                 {errors.politica_id && (
                   <p className="text-xs text-red-600">{errors.politica_id.message}</p>
                 )}

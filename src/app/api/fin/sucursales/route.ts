@@ -35,12 +35,12 @@ export const GET = withAuth(async (_request, _context, authContext) => {
     const snapshot = await db
       .collection(FIN_COLLECTIONS.sucursales(orgId))
       .where('activa', '==', true)
-      .orderBy('nombre', 'asc')
       .get();
 
     const sucursales = snapshot.docs
       .map(doc => mapSucursal(doc))
-      .filter((sucursal): sucursal is FinSucursal => sucursal !== null);
+      .filter((sucursal): sucursal is FinSucursal => sucursal !== null)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
     return NextResponse.json({ success: true, data: sucursales });
   } catch (error) {
