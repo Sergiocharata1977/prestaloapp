@@ -673,28 +673,32 @@ export class CreditoService {
         throw new Error('La politica requiere legajo completo');
       }
 
-      const config = normalizeConfig(orgId, configSnap.data());
-      const [
-        creditosSnap,
-        interesesNoDevengadosSnap,
-        ventasFinanciadasSnap,
-      ] = await Promise.all([
-        transaction.get(
-          db.doc(
-            `${FIN_COLLECTIONS.cuentas(orgId)}/${config.cuentas.creditos_por_financiaciones}`
-          )
-        ),
-        transaction.get(
-          db.doc(
-            `${FIN_COLLECTIONS.cuentas(orgId)}/${config.cuentas.intereses_no_devengados}`
-          )
-        ),
-        transaction.get(
-          db.doc(
-            `${FIN_COLLECTIONS.cuentas(orgId)}/${config.cuentas.ventas_financiadas}`
-          )
-        ),
-      ]);
+      let config: FinConfigCuentas | null = null;
+      try {
+        config = normalizeConfig(orgId, configSnap.data());
+      } catch {
+        // Plan de cuentas no configurado — asiento contable omitido
+      }
+
+      const accountSnaps = config
+        ? await Promise.all([
+            transaction.get(
+              db.doc(
+                `${FIN_COLLECTIONS.cuentas(orgId)}/${config.cuentas.creditos_por_financiaciones}`
+              )
+            ),
+            transaction.get(
+              db.doc(
+                `${FIN_COLLECTIONS.cuentas(orgId)}/${config.cuentas.intereses_no_devengados}`
+              )
+            ),
+            transaction.get(
+              db.doc(
+                `${FIN_COLLECTIONS.cuentas(orgId)}/${config.cuentas.ventas_financiadas}`
+              )
+            ),
+          ])
+        : null;
 
       const nextSequence = sequenceSnap.exists
         ? Number(sequenceSnap.data()?.value || 0) + 1
@@ -797,36 +801,40 @@ export class CreditoService {
         cuotas_count: input.cantidad_cuotas,
         cuotas_pagas: 0,
         saldo_capital: round2(input.capital),
-        asiento_otorgamiento_id: asientoRef.id,
+        asiento_otorgamiento_id: config ? asientoRef.id : '',
         created_at: now,
         created_by: usuarioId,
         updated_at: now,
       };
 
-      const asiento = buildAsientoOtorgamiento(
-        credito,
-        config,
-        {
-          creditos: parseCuenta(
-            config.cuentas.creditos_por_financiaciones,
-            creditosSnap.data()
-          ),
-          interesesNoDevengados: parseCuenta(
-            config.cuentas.intereses_no_devengados,
-            interesesNoDevengadosSnap.data()
-          ),
-          ventasFinanciadas: parseCuenta(
-            config.cuentas.ventas_financiadas,
-            ventasFinanciadasSnap.data()
-          ),
-        },
-        asientoRef.id,
-        usuarioId,
-        usuarioNombre
-      );
-
       transaction.set(creditoRef, credito);
-      transaction.set(asientoRef, asiento);
+
+      if (config && accountSnaps) {
+        const [creditosSnap, interesesNoDevengadosSnap, ventasFinanciadasSnap] =
+          accountSnaps;
+        const asiento = buildAsientoOtorgamiento(
+          credito,
+          config,
+          {
+            creditos: parseCuenta(
+              config.cuentas.creditos_por_financiaciones,
+              creditosSnap.data()
+            ),
+            interesesNoDevengados: parseCuenta(
+              config.cuentas.intereses_no_devengados,
+              interesesNoDevengadosSnap.data()
+            ),
+            ventasFinanciadas: parseCuenta(
+              config.cuentas.ventas_financiadas,
+              ventasFinanciadasSnap.data()
+            ),
+          },
+          asientoRef.id,
+          usuarioId,
+          usuarioNombre
+        );
+        transaction.set(asientoRef, asiento);
+      }
       transaction.set(
         sequenceRef,
         {

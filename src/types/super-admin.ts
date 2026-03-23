@@ -27,6 +27,7 @@ export type Organization = {
   createdAt: string | null;
   updatedAt: string | null;
   metrics: OrganizationMetrics;
+  capabilities: string[];
 };
 
 export type SuperAdminUser = {

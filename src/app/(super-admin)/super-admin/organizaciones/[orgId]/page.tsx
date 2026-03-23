@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Package, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/apiFetch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PLUGIN_CAPABILITIES } from "@/lib/capabilities";
 import type {
   Organization,
   OrganizationPlan,
@@ -40,8 +41,11 @@ export default function OrganizationDetailPage() {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingPlugins, setSavingPlugins] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pluginError, setPluginError] = useState<string | null>(null);
+  const [pluginSuccess, setPluginSuccess] = useState(false);
 
   useEffect(() => {
     if (!params.orgId) {
@@ -148,6 +152,42 @@ export default function OrganizationDetailPage() {
     }
   }
 
+  function toggleCapability(cap: string) {
+    if (!organization) return;
+    const current = organization.capabilities ?? [];
+    const next = current.includes(cap)
+      ? current.filter((c) => c !== cap)
+      : [...current, cap];
+    setOrganization((prev) => (prev ? { ...prev, capabilities: next } : prev));
+  }
+
+  async function handleSavePlugins() {
+    if (!organization) return;
+    try {
+      setSavingPlugins(true);
+      setPluginError(null);
+      setPluginSuccess(false);
+      const response = await apiFetch(
+        `/api/super-admin/organizations/${organization.id}/capabilities`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ capabilities: organization.capabilities ?? [] }),
+        }
+      );
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setPluginError(data.error ?? "No se pudo guardar");
+        return;
+      }
+      setPluginSuccess(true);
+    } catch (e) {
+      console.error(e);
+      setPluginError("No se pudo guardar los plugins");
+    } finally {
+      setSavingPlugins(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -213,6 +253,63 @@ export default function OrganizationDetailPage() {
           {error}
         </div>
       ) : null}
+
+      {/* Plugin Marketplace */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Package className="h-5 w-5 text-blue-600" />
+            <CardTitle className="text-base">Plugins habilitados</CardTitle>
+          </div>
+          <Button
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700"
+            disabled={savingPlugins}
+            onClick={() => void handleSavePlugins()}
+          >
+            {savingPlugins ? "Guardando..." : "Guardar plugins"}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {pluginError ? (
+            <p className="text-sm text-red-600">{pluginError}</p>
+          ) : null}
+          {pluginSuccess ? (
+            <p className="text-sm text-emerald-600">
+              Plugins actualizados. Los usuarios verán los cambios al renovar su sesión.
+            </p>
+          ) : null}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {PLUGIN_CAPABILITIES.map((plugin) => {
+              const enabled = (organization.capabilities ?? []).includes(plugin.value);
+              return (
+                <button
+                  key={plugin.value}
+                  type="button"
+                  onClick={() => toggleCapability(plugin.value)}
+                  className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${
+                    enabled
+                      ? "border-blue-200 bg-blue-50"
+                      : "border-slate-200 bg-white hover:bg-slate-50"
+                  }`}
+                >
+                  {enabled ? (
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+                  ) : (
+                    <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-300" />
+                  )}
+                  <div>
+                    <p className={`text-sm font-medium ${enabled ? "text-blue-900" : "text-slate-700"}`}>
+                      {plugin.label}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">{plugin.description}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         <Card>

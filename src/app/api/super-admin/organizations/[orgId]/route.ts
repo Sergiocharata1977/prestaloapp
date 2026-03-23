@@ -23,6 +23,7 @@ type FirestoreOrganization = {
   adminUid?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
+  capabilities?: unknown;
 };
 
 function isOrganizationPlan(value: unknown): value is OrganizationPlan {
@@ -66,6 +67,10 @@ async function toOrganization(
   const data = (doc.data() ?? {}) as FirestoreOrganization;
   const metrics = await getOrganizationMetrics(doc.id);
 
+  const capabilities = Array.isArray(data.capabilities)
+    ? (data.capabilities as unknown[]).filter((c): c is string => typeof c === "string")
+    : [];
+
   return {
     id: doc.id,
     name: typeof data.name === "string" ? data.name : "Sin nombre",
@@ -77,6 +82,7 @@ async function toOrganization(
     createdAt: serializeTimestamp(data.createdAt),
     updatedAt: serializeTimestamp(data.updatedAt),
     metrics,
+    capabilities,
   };
 }
 
