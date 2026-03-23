@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Circle, Package } from "lucide-react";
+import { CheckCircle2, Circle, Package, RefreshCw } from "lucide-react";
 import { apiFetch } from "@/lib/apiFetch";
+import { auth } from "@/firebase/config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PLUGIN_CAPABILITIES } from "@/lib/capabilities";
@@ -11,6 +12,7 @@ export default function PluginsPage() {
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +56,20 @@ export default function PluginsPage() {
     }
   }
 
+  async function handleRefresh() {
+    try {
+      setRefreshing(true);
+      const user = auth.currentUser;
+      if (user) {
+        await user.getIdToken(true); // fuerza renovación del JWT
+      }
+      window.location.reload();
+    } catch (e) {
+      console.error(e);
+      setRefreshing(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -87,8 +103,18 @@ export default function PluginsPage() {
       ) : null}
 
       {success ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          Plugins actualizados. Los cambios se verán al renovar sesión.
+        <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <span>Plugins guardados. Actualizá los permisos para verlos en el menú.</span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-4 shrink-0 border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+            disabled={refreshing}
+            onClick={() => void handleRefresh()}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "Actualizando..." : "Actualizar permisos"}
+          </Button>
         </div>
       ) : null}
 
