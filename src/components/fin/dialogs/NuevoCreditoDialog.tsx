@@ -2,10 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { AlertTriangle, ChevronRight, ShieldCheck, Wallet } from "lucide-react";
+import { CheckCircle2, Printer } from "lucide-react";
 import type { FinCliente } from "@/types/fin-cliente";
 import type { FinEvaluacion } from "@/types/fin-evaluacion";
 import type { FinLineaCredito } from "@/types/fin-linea-credito";
@@ -23,7 +20,6 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -34,23 +30,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AmortizationPreviewTable } from "@/components/fin/AmortizationPreviewTable";
 
-const schema = z.object({
-  sucursal_id: z.string(),
-  cliente_id: z.string().min(1, "Selecciona un cliente"),
-  politica_id: z.string().min(1, "Selecciona una politica"),
-  plan_financiacion_id: z.string().optional(),
-  articulo_descripcion: z.string().min(1, "Requerido"),
-  capital: z.number().positive("Debe ser mayor a 0"),
-  tasa_mensual: z.number().positive("Debe ser mayor a 0"),
-  cantidad_cuotas: z.number().int().positive("Debe ser mayor a 0"),
-  sistema: z.enum(["frances", "aleman"]),
-  fecha_otorgamiento: z.string().min(1, "Requerido"),
-  fecha_primer_vencimiento: z.string().min(1, "Requerido"),
-});
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-type FormValues = z.infer<typeof schema>;
+type TipoFormulario = "prestamo" | "compra_financiada";
+
+interface FormState {
+  sucursal_id: string;
+  cliente_id: string;
+  politica_id: string;
+  plan_financiacion_id: string;
+  articulo_descripcion: string;
+  capital: string;
+  cantidad_cuotas: string;
+  tasa_mensual: number;
+  sistema: "frances" | "aleman";
+  fecha_otorgamiento: string;
+  fecha_primer_vencimiento: string;
+}
 
 interface Props {
   open: boolean;
@@ -59,48 +58,55 @@ interface Props {
   onSuccess?: () => void;
 }
 
-const currencyFormatter = new Intl.NumberFormat("es-AR", {
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const fmt = new Intl.NumberFormat("es-AR", {
   style: "currency",
   currency: "ARS",
+  maximumFractionDigits: 0,
 });
 
-function ars(value?: number | null) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "No disponible";
-  return currencyFormatter.format(value);
+function ars(v?: number | null) {
+  if (typeof v !== "number" || isNaN(v)) return "—";
+  return fmt.format(v);
 }
 
-function buildClienteLabel(cliente: FinCliente) {
-  return cliente.tipo === "fisica"
-    ? `${cliente.apellido ?? ""}, ${cliente.nombre}`.replace(/^,\s*/, "").trim()
-    : cliente.nombre;
+function buildLabel(c: FinCliente) {
+  return c.tipo === "fisica"
+    ? `${c.apellido ?? ""}, ${c.nombre}`.replace(/^,\s*/, "").trim()
+    : c.nombre;
 }
 
-function resolveClientePayload(data: unknown) {
-  const payload = data as { cliente?: FinCliente } | FinCliente;
-  if ("cliente" in (payload as { cliente?: FinCliente })) {
-    return (payload as { cliente?: FinCliente }).cliente ?? null;
-  }
-  return payload as FinCliente;
+function todayIso() {
+  return new Date().toISOString().split("T")[0];
 }
 
-function resolveEvaluacionesPayload(data: unknown) {
-  return ((data as { evaluaciones?: FinEvaluacion[] }).evaluaciones ?? []).sort((a, b) =>
-    b.fecha.localeCompare(a.fecha)
-  );
+function dia5MesSiguiente() {
+  const d = new Date();
+  const m = d.getMonth() === 11 ? 1 : d.getMonth() + 2;
+  const y = d.getMonth() === 11 ? d.getFullYear() + 1 : d.getFullYear();
+  return `${y}-${String(m).padStart(2, "0")}-05`;
 }
 
-function resolveLineaPayload(data: unknown) {
-  return ((data as { linea?: FinLineaCredito }).linea ?? null) as FinLineaCredito | null;
-}
+const EMPTY: FormState = {
+  sucursal_id: "",
+  cliente_id: "",
+  politica_id: "",
+  plan_financiacion_id: "",
+  articulo_descripcion: "",
+  capital: "",
+  cantidad_cuotas: "",
+  tasa_mensual: 5,
+  sistema: "frances",
+  fecha_otorgamiento: todayIso(),
+  fecha_primer_vencimiento: dia5MesSiguiente(),
+};
 
-function resolveCupoDisponible(cliente: FinCliente | null, linea: FinLineaCredito | null) {
-  if (linea) return linea.disponible_actual;
-  if (!cliente) return null;
-
-  const limite = cliente.limite_credito_vigente ?? cliente.limite_credito_asignado ?? null;
-  if (typeof limite !== "number") return null;
-  return Math.max(limite - (cliente.saldo_total_adeudado ?? 0), 0);
-}
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function NuevoCreditoDialog({
   open,
@@ -111,739 +117,556 @@ export function NuevoCreditoDialog({
   const router = useRouter();
   const { capabilities } = useAuth();
   const hasSucursalesMulti = capabilities.includes(CAPABILITIES.SUCURSALES_MULTI);
-  const [step, setStep] = useState<1 | 2>(1);
+
+  const [tipo, setTipo] = useState<TipoFormulario>("prestamo");
+  const [form, setForm] = useState<FormState>({ ...EMPTY });
+  const [valorContado, setValorContado] = useState("");
+  const [creditoCreado, setCreditoCreado] = useState<{ id: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
   const [sucursales, setSucursales] = useState<FinSucursal[]>([]);
   const [planes, setPlanes] = useState<FinPlanFinanciacion[]>([]);
   const [politicas, setPoliticas] = useState<FinPoliticaCrediticia[]>([]);
+
   const [clienteSearch, setClienteSearch] = useState("");
   const [clienteResultados, setClienteResultados] = useState<FinCliente[]>([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<FinCliente | null>(null);
-  const [lineaCredito, setLineaCredito] = useState<FinLineaCredito | null>(null);
-  const [evaluaciones, setEvaluaciones] = useState<FinEvaluacion[]>([]);
-  const [clienteStatusLoading, setClienteStatusLoading] = useState(false);
+  const [clienteLoading, setClienteLoading] = useState(false);
+
   const [tabla, setTabla] = useState<TablaAmortizacion | null>(null);
-  const [tasaAplicada, setTasaAplicada] = useState<number | null>(null);
   const [tablaLoading, setTablaLoading] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    getValues,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      sucursal_id: "",
-      sistema: "frances",
-      cliente_id: preselectedClienteId ?? "",
-      politica_id: "",
-      plan_financiacion_id: "",
-      tasa_mensual: 5,
-    },
-  });
+  const setField = <K extends keyof FormState>(k: K, v: FormState[K]) =>
+    setForm((prev) => ({ ...prev, [k]: v }));
 
-  const loadClienteContext = async (clienteId: string) => {
-    setClienteStatusLoading(true);
-    try {
-      const [clienteRes, lineaRes, evaluacionesRes] = await Promise.all([
-        apiFetch(`/api/fin/clientes/${clienteId}`).then((response) => response.json()),
-        apiFetch(`/api/fin/clientes/${clienteId}/linea`)
-          .then((response) => (response.ok ? response.json() : null))
-          .catch(() => null),
-        apiFetch(`/api/fin/clientes/${clienteId}/evaluacion`)
-          .then((response) => (response.ok ? response.json() : null))
-          .catch(() => null),
-      ]);
-
-      const cliente = resolveClientePayload(clienteRes);
-      setClienteSeleccionado(cliente);
-      setLineaCredito(resolveLineaPayload(lineaRes));
-      setEvaluaciones(resolveEvaluacionesPayload(evaluacionesRes));
-
-      if (cliente) {
-        setClienteSearch(buildClienteLabel(cliente));
-        setValue("cliente_id", cliente.id, { shouldValidate: true });
-      }
-    } finally {
-      setClienteStatusLoading(false);
-    }
-  };
-
+  // ---------------------------------------------------------------------------
+  // Load catalogs on open
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!open) return;
-
     Promise.all([
-      apiFetch("/api/fin/sucursales").then((response) => response.json()),
+      apiFetch("/api/fin/sucursales").then((r) => r.json()),
       apiFetch("/api/fin/planes-financiacion?activo=true")
-        .then((response) => response.json())
-        .catch(() => ({ planes: [] })),
+        .then((r) => r.json())
+        .catch(() => ({})),
       apiFetch("/api/fin/politicas-crediticias?activo=true")
-        .then((response) => response.json())
-        .catch(() => ({ politicas: [] })),
-    ]).then(([sucursalesData, planesData, politicasData]) => {
-      setSucursales((sucursalesData as { sucursales?: FinSucursal[] }).sucursales ?? []);
-      setPlanes(
-        (planesData as { planesFinanciacion?: FinPlanFinanciacion[]; planes?: FinPlanFinanciacion[] })
-          .planesFinanciacion ??
-          (planesData as { planes?: FinPlanFinanciacion[] }).planes ??
-          []
-      );
-      setPoliticas(
-        (politicasData as {
-          politicasCrediticias?: FinPoliticaCrediticia[];
-          politicas?: FinPoliticaCrediticia[];
-        }).politicasCrediticias ??
-          (politicasData as { politicas?: FinPoliticaCrediticia[] }).politicas ??
-          []
-      );
+        .then((r) => r.json())
+        .catch(() => ({})),
+    ]).then(([sd, pd, pol]) => {
+      const sArr = (sd as { sucursales?: FinSucursal[] }).sucursales ?? [];
+      const pArr =
+        (pd as { planesFinanciacion?: FinPlanFinanciacion[] }).planesFinanciacion ??
+        (pd as { planes?: FinPlanFinanciacion[] }).planes ?? [];
+      const polArr =
+        (pol as { politicasCrediticias?: FinPoliticaCrediticia[] }).politicasCrediticias ??
+        (pol as { politicas?: FinPoliticaCrediticia[] }).politicas ?? [];
+      setSucursales(sArr);
+      setPlanes(pArr);
+      setPoliticas(polArr);
+      // Auto-select sucursal
+      if (!hasSucursalesMulti && sArr.length > 0) {
+        setField("sucursal_id", sArr[0].id);
+      }
     });
-  }, [open]);
+  }, [open, hasSucursalesMulti]);
 
+  // Preselected client
   useEffect(() => {
     if (!open || !preselectedClienteId) return;
-    void loadClienteContext(preselectedClienteId);
+    void loadCliente(preselectedClienteId);
   }, [open, preselectedClienteId]);
 
-  // Auto-seleccionar primera sucursal si no tiene plugin multi-sucursal
-  useEffect(() => {
-    if (hasSucursalesMulti || sucursales.length === 0) return;
-    const current = getValues("sucursal_id");
-    if (!current) setValue("sucursal_id", sucursales[0].id);
-  }, [sucursales, hasSucursalesMulti, getValues, setValue]);
-
-  // Auto-seleccionar política cuando el cliente tiene un único match
-  useEffect(() => {
-    if (!clienteSeleccionado?.tipo_cliente_id || politicas.length === 0) return;
-    const matching = politicas.filter(
-      (p) => p.tipo_cliente_id === clienteSeleccionado.tipo_cliente_id
-    );
-    if (matching.length === 1) {
-      setValue("politica_id", matching[0].id, { shouldValidate: true });
+  // ---------------------------------------------------------------------------
+  // Cliente context
+  // ---------------------------------------------------------------------------
+  const loadCliente = async (id: string) => {
+    setClienteLoading(true);
+    try {
+      const res = await apiFetch(`/api/fin/clientes/${id}`).then((r) => r.json());
+      const c =
+        (res as { cliente?: FinCliente }).cliente ?? (res as FinCliente);
+      if (c?.id) {
+        setClienteSeleccionado(c);
+        setClienteSearch(buildLabel(c));
+        setField("cliente_id", c.id);
+        // Auto-assign política por segmento
+        setPoliticas((prev) => {
+          const match = prev.filter(
+            (p) => p.tipo_cliente_id === c.tipo_cliente_id
+          );
+          if (match.length === 1) {
+            setField("politica_id", match[0].id);
+            // Auto-assign primer plan
+            setPlanes((plns) => {
+              const planMatch = plns.filter(
+                (pl) => pl.politica_id === match[0].id
+              );
+              if (planMatch.length > 0) setField("plan_financiacion_id", planMatch[0].id);
+              return plns;
+            });
+          }
+          return prev;
+        });
+      }
+    } finally {
+      setClienteLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clienteSeleccionado?.tipo_cliente_id, politicas, setValue]);
-
-  const handleClienteSearch = (query: string) => {
-    setClienteSearch(query);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!query) {
-      setClienteResultados([]);
-      setClienteSeleccionado(null);
-      setLineaCredito(null);
-      setEvaluaciones([]);
-      setValue("cliente_id", "", { shouldValidate: true });
-      return;
-    }
-
-    debounceRef.current = setTimeout(() => {
-      apiFetch(`/api/fin/clientes?q=${encodeURIComponent(query)}`)
-        .then((response) => response.json())
-        .then((data) =>
-          setClienteResultados((data as { clientes?: FinCliente[] }).clientes ?? [])
-        );
-    }, 300);
   };
 
-  const currentValues = watch();
-  const politicasFiltradas = politicas.filter((politica) => {
-    if (!clienteSeleccionado?.tipo_cliente_id) return true;
-    return politica.tipo_cliente_id === clienteSeleccionado.tipo_cliente_id;
-  });
-  const planesFiltrados = planes.filter((plan) =>
-    currentValues.politica_id ? plan.politica_id === currentValues.politica_id : true
-  );
-  const politicaSeleccionada =
-    politicas.find((politica) => politica.id === currentValues.politica_id) ?? null;
-  const planSeleccionado =
-    planes.find((plan) => plan.id === currentValues.plan_financiacion_id) ?? null;
-
+  // Re-run política/plan auto-assign when catalogs load after cliente is set
   useEffect(() => {
-    if (planSeleccionado && planSeleccionado.politica_id !== currentValues.politica_id) {
-      setValue("politica_id", planSeleccionado.politica_id, { shouldValidate: true });
+    if (!clienteSeleccionado || politicas.length === 0) return;
+    const match = politicas.filter(
+      (p) => p.tipo_cliente_id === clienteSeleccionado.tipo_cliente_id
+    );
+    if (match.length === 1 && !form.politica_id) {
+      setField("politica_id", match[0].id);
+      const planMatch = planes.filter((pl) => pl.politica_id === match[0].id);
+      if (planMatch.length > 0 && !form.plan_financiacion_id) {
+        setField("plan_financiacion_id", planMatch[0].id);
+      }
     }
-  }, [currentValues.politica_id, planSeleccionado, setValue]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteSeleccionado, politicas, planes]);
 
+  // Auto-assign plan when política changes
   useEffect(() => {
-    if (
-      currentValues.plan_financiacion_id &&
-      planSeleccionado &&
-      planSeleccionado.politica_id !== currentValues.politica_id
-    ) {
-      setValue("plan_financiacion_id", "", { shouldValidate: true });
+    if (!form.politica_id || planes.length === 0) return;
+    const match = planes.filter((p) => p.politica_id === form.politica_id);
+    if (match.length > 0 && !match.find((p) => p.id === form.plan_financiacion_id)) {
+      setField("plan_financiacion_id", match[0].id);
     }
-  }, [
-    currentValues.plan_financiacion_id,
-    currentValues.politica_id,
-    planSeleccionado,
-    setValue,
-  ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.politica_id, planes]);
 
+  // Resolve tasa from plan + cuotas
   useEffect(() => {
-    if (!planSeleccionado || !currentValues.cantidad_cuotas) {
-      setTasaAplicada(null);
+    const plan = planes.find((p) => p.id === form.plan_financiacion_id);
+    const cuotas = parseInt(form.cantidad_cuotas);
+    if (!plan || !cuotas) return;
+    const tasa = resolverTasa(plan, cuotas);
+    setField("tasa_mensual", tasa);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.plan_financiacion_id, form.cantidad_cuotas, planes]);
+
+  // ---------------------------------------------------------------------------
+  // Live preview
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const capital = parseFloat(form.capital);
+    const cuotas = parseInt(form.cantidad_cuotas);
+    if (!capital || !cuotas || !form.fecha_primer_vencimiento || !form.tasa_mensual) {
+      setTabla(null);
       return;
     }
-
-    const tasa = resolverTasa(
-      planSeleccionado,
-      currentValues.cantidad_cuotas
-    );
-    setTasaAplicada(tasa);
-    setValue("tasa_mensual", tasa, { shouldDirty: true, shouldValidate: true });
-  }, [currentValues.cantidad_cuotas, planSeleccionado, setValue]);
-
-  const watchedFields = watch([
-    "capital",
-    "tasa_mensual",
-    "cantidad_cuotas",
-    "sistema",
-    "fecha_primer_vencimiento",
-    "plan_financiacion_id",
-  ]);
-
-  useEffect(() => {
-    const [capital, tasa, cuotas, sistema, fecha, planId] = watchedFields;
-    const tasaPreview = planId ? tasaAplicada ?? tasa : tasa;
-
-    if (!capital || !cuotas || !fecha || !tasaPreview) return;
     if (previewRef.current) clearTimeout(previewRef.current);
-
     previewRef.current = setTimeout(() => {
       setTablaLoading(true);
       apiFetch("/api/fin/creditos/preview", {
         method: "POST",
         body: JSON.stringify({
           capital,
-          tasa_mensual: tasaPreview,
-          plan_financiacion_id: planId || undefined,
+          tasa_mensual: form.tasa_mensual,
+          plan_financiacion_id: form.plan_financiacion_id || undefined,
           cantidad_cuotas: cuotas,
-          sistema,
-          fecha_primer_vencimiento: fecha,
+          sistema: "frances",
+          fecha_primer_vencimiento: form.fecha_primer_vencimiento,
         }),
       })
-        .then((response) => response.json())
+        .then((r) => r.json())
         .then((data) => {
-          const payload = data as {
+          const d = data as {
             tabla?: TablaAmortizacion;
             tabla_amortizacion?: TablaAmortizacion;
             tasa_mensual_aplicada?: number;
           };
-          setTabla(payload.tabla ?? payload.tabla_amortizacion ?? null);
-          setTasaAplicada(payload.tasa_mensual_aplicada ?? tasaPreview);
+          setTabla(d.tabla ?? d.tabla_amortizacion ?? null);
+          if (d.tasa_mensual_aplicada) setField("tasa_mensual", d.tasa_mensual_aplicada);
         })
-        .catch(() => {
-          setTabla(null);
-          setTasaAplicada(planId ? tasaPreview : null);
-        })
+        .catch(() => setTabla(null))
         .finally(() => setTablaLoading(false));
-    }, 600);
-  }, [tasaAplicada, watchedFields.join(",")]);
+    }, 500);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.capital, form.cantidad_cuotas, form.tasa_mensual, form.fecha_primer_vencimiento, form.plan_financiacion_id]);
 
-  const cupoDisponible = resolveCupoDisponible(clienteSeleccionado, lineaCredito);
-  const evaluacionVigente =
-    lineaCredito?.evaluacion_vigente ??
-    evaluaciones.find(
-      (evaluacion) => evaluacion.es_vigente && evaluacion.estado === "aprobada"
-    ) ??
-    null;
-  const tierActual =
-    evaluacionVigente?.tier_asignado ??
-    evaluacionVigente?.tier ??
-    clienteSeleccionado?.tier_crediticio ??
-    null;
-  const tierConfig = politicaSeleccionada?.tiers.find((item) => item.tier === tierActual);
-  const bloqueos: string[] = [];
-  const avisos: string[] = [];
-
-  if (politicaSeleccionada && clienteSeleccionado) {
-    if (
-      politicaSeleccionada.requiere_legajo &&
-      clienteSeleccionado.legajo?.estado !== "completo"
-    ) {
-      bloqueos.push(
-        "Legajo incompleto. La politica seleccionada exige legajo completo antes de otorgar."
-      );
-    }
-
-    if (politicaSeleccionada.requiere_evaluacion_vigente) {
-      if (!evaluacionVigente) {
-        bloqueos.push(
-          "Scoring sin vigencia. La politica seleccionada requiere una evaluacion aprobada y vigente."
-        );
-      } else if ((evaluacionVigente.tier_asignado ?? evaluacionVigente.tier) === "reprobado") {
-        bloqueos.push(
-          "Scoring rechazado. El cliente figura reprobado para esta operatoria."
-        );
-      }
-    }
-
-    if (
-      typeof currentValues.capital === "number" &&
-      typeof cupoDisponible === "number" &&
-      currentValues.capital > cupoDisponible
-    ) {
-      bloqueos.push(
-        `Limite excedido. El cupo disponible del cliente es ${ars(cupoDisponible)}.`
-      );
-    }
-
-    if (
-      typeof currentValues.capital === "number" &&
-      typeof politicaSeleccionada.monto_maximo === "number" &&
-      currentValues.capital > politicaSeleccionada.monto_maximo
-    ) {
-      bloqueos.push(
-        `Limite de politica excedido. El maximo permitido es ${ars(
-          politicaSeleccionada.monto_maximo
-        )}.`
-      );
-    }
-
-    if (
-      typeof currentValues.capital === "number" &&
-      typeof politicaSeleccionada.monto_minimo === "number" &&
-      currentValues.capital < politicaSeleccionada.monto_minimo
-    ) {
-      avisos.push(
-        `Monto por debajo del minimo sugerido por politica: ${ars(
-          politicaSeleccionada.monto_minimo
-        )}.`
-      );
-    }
-
-    if (
-      typeof currentValues.capital === "number" &&
-      typeof tierConfig?.monto_maximo_otorgamiento === "number" &&
-      currentValues.capital > tierConfig.monto_maximo_otorgamiento
-    ) {
-      bloqueos.push(
-        `Limite por tier ${tierConfig.tier} excedido. Tope del tier: ${ars(
-          tierConfig.monto_maximo_otorgamiento
-        )}.`
-      );
-    }
-  }
-
-  if (clienteSeleccionado && typeof cupoDisponible !== "number") {
-    avisos.push(
-      "No se pudo determinar el cupo disponible con precision. Se usara la validacion final del backend."
-    );
-  }
-
-  const goToStep2 = handleSubmit(() => {
-    if (bloqueos.length > 0) return;
-    setStep(2);
-  });
-
-  const confirmSubmit = async () => {
-    if (bloqueos.length > 0) {
-      setServerError(bloqueos[0]);
-      setStep(1);
-      return;
-    }
-
+  // ---------------------------------------------------------------------------
+  // Submit
+  // ---------------------------------------------------------------------------
+  const handleConfirm = async () => {
     setServerError(null);
+    const capital = parseFloat(form.capital);
+    const cuotas = parseInt(form.cantidad_cuotas);
+    if (!form.cliente_id) return setServerError("Seleccioná un cliente.");
+    if (!capital || capital <= 0) return setServerError("Ingresá un monto válido.");
+    if (!cuotas || cuotas <= 0) return setServerError("Ingresá la cantidad de cuotas.");
+
+    setSubmitting(true);
     try {
-      const values = getValues();
-      const { politica_id: _politicaId, ...payload } = values;
+      const payload = {
+        sucursal_id: form.sucursal_id,
+        cliente_id: form.cliente_id,
+        plan_financiacion_id: form.plan_financiacion_id || undefined,
+        articulo_descripcion:
+          tipo === "prestamo" ? "Préstamo personal" : form.articulo_descripcion,
+        capital,
+        tasa_mensual: form.tasa_mensual,
+        cantidad_cuotas: cuotas,
+        sistema: "frances" as const,
+        fecha_otorgamiento: form.fecha_otorgamiento,
+        fecha_primer_vencimiento: form.fecha_primer_vencimiento,
+      };
       const res = await apiFetch("/api/fin/creditos", {
         method: "POST",
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error ?? "Error al crear credito");
+        throw new Error((body as { error?: string }).error ?? "Error al crear crédito");
       }
       const data = (await res.json()) as { creditoId: string };
-      handleClose();
+      setCreditoCreado({ id: data.creditoId });
       onSuccess?.();
-      router.push(`/creditos/${data.creditoId}`);
-    } catch (error) {
-      setServerError(error instanceof Error ? error.message : "Error inesperado");
-      setStep(1);
+    } catch (e) {
+      setServerError(e instanceof Error ? e.message : "Error inesperado");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleClose = () => {
-    reset({
-      sistema: "frances",
-      cliente_id: preselectedClienteId ?? "",
-      politica_id: "",
-      plan_financiacion_id: "",
-      tasa_mensual: 5,
-    });
-    setStep(1);
+    setForm({ ...EMPTY });
+    setTipo("prestamo");
+    setValorContado("");
+    setCreditoCreado(null);
+    setServerError(null);
     setTabla(null);
-    setTasaAplicada(null);
-    setPlanes([]);
-    setPoliticas([]);
     setClienteSearch("");
     setClienteSeleccionado(null);
-    setLineaCredito(null);
-    setEvaluaciones([]);
     setClienteResultados([]);
-    setServerError(null);
     onOpenChange(false);
   };
 
+  const politicasFiltradas = politicas.filter((p) =>
+    clienteSeleccionado?.tipo_cliente_id
+      ? p.tipo_cliente_id === clienteSeleccionado.tipo_cliente_id
+      : true
+  );
+  const politicaSeleccionada = politicas.find((p) => p.id === form.politica_id);
+  const planSeleccionado = planes.find((p) => p.id === form.plan_financiacion_id);
+
+  // ---------------------------------------------------------------------------
+  // Render — success
+  // ---------------------------------------------------------------------------
+  if (creditoCreado) {
+    return (
+      <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+        <DialogContent className="max-w-md">
+          <div className="flex flex-col items-center gap-5 py-6 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+              <CheckCircle2 className="h-8 w-8 text-green-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Crédito otorgado</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                La operación fue registrada correctamente.
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Button
+                onClick={() =>
+                  window.open(`/print/credito/${creditoCreado.id}`, "_blank")
+                }
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Imprimir Pagaré
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  handleClose();
+                  router.push(`/creditos/${creditoCreado.id}`);
+                }}
+              >
+                Ver crédito
+              </Button>
+              <Button variant="ghost" onClick={handleClose}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render — form
+  // ---------------------------------------------------------------------------
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : handleClose())}>
-      <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Nuevo credito</DialogTitle>
-          <DialogDescription>
-            Paso {step} de 2 - {step === 1 ? "Datos del credito" : "Confirmacion"}
-          </DialogDescription>
+          <DialogTitle>
+            {tipo === "prestamo"
+              ? "Formulario de Préstamo"
+              : "Formulario de Compra Financiada"}
+          </DialogTitle>
         </DialogHeader>
 
-        {step === 1 && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <form onSubmit={goToStep2} className="space-y-4">
-              {hasSucursalesMulti && (
-                <div className="space-y-2">
-                  <Label>Sucursal</Label>
-                  <Select
-                    value={currentValues.sucursal_id}
-                    onValueChange={(value) => setValue("sucursal_id", value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona una sucursal" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sucursales.map((sucursal) => (
-                        <SelectItem key={sucursal.id} value={sucursal.id}>
-                          {sucursal.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.sucursal_id && (
-                    <p className="text-xs text-red-600">{errors.sucursal_id.message}</p>
-                  )}
-                </div>
-              )}
+        {/* Tipo selector */}
+        <div className="flex gap-2 border-b pb-4">
+          {(["prestamo", "compra_financiada"] as TipoFormulario[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTipo(t)}
+              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                tipo === t
+                  ? "bg-indigo-600 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {t === "prestamo" ? "Préstamo" : "Compra Financiada"}
+            </button>
+          ))}
+        </div>
 
-              <div className="space-y-2">
-                <Label>Cliente</Label>
-                <div className="relative">
-                  <Input
-                    placeholder="Buscar cliente por nombre o CUIT..."
-                    value={clienteSearch}
-                    onChange={(event) => handleClienteSearch(event.target.value)}
-                  />
-                  {clienteResultados.length > 0 && (
-                    <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg">
-                      {clienteResultados.map((cliente) => (
-                        <button
-                          key={cliente.id}
-                          type="button"
-                          className="flex w-full items-start gap-3 px-4 py-3 text-sm hover:bg-amber-50"
-                          onClick={() => {
-                            void loadClienteContext(cliente.id);
-                            setClienteResultados([]);
-                          }}
-                        >
-                          <span className="font-medium">{buildClienteLabel(cliente)}</span>
-                          <span className="text-slate-400">{cliente.cuit}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {clienteSeleccionado && (
-                  <p className="text-xs text-green-700">
-                    Cliente seleccionado: CUIT {clienteSeleccionado.cuit}
-                  </p>
-                )}
-                {clienteStatusLoading && (
-                  <p className="text-xs text-slate-500">Cargando contexto del cliente...</p>
-                )}
-                {errors.cliente_id && (
-                  <p className="text-xs text-red-600">{errors.cliente_id.message}</p>
-                )}
-              </div>
+        {/* ── Main layout ── */}
+        <div className="grid grid-cols-2 gap-6">
 
-              <div className="space-y-2">
-                <Label>Política crediticia</Label>
-                {politicasFiltradas.length === 1 && currentValues.politica_id ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-                    <ShieldCheck className="h-4 w-4 shrink-0" />
-                    <span>
-                      <span className="font-medium">{politicasFiltradas[0].nombre}</span>
-                      <span className="ml-1 text-green-600">(asignada por segmento)</span>
-                    </span>
-                    <button
-                      type="button"
-                      className="ml-auto text-xs text-green-600 underline hover:text-green-800"
-                      onClick={() => setValue("politica_id", "", { shouldValidate: true })}
-                    >
-                      cambiar
-                    </button>
-                  </div>
-                ) : (
-                  <Select
-                    value={currentValues.politica_id}
-                    onValueChange={(value) => setValue("politica_id", value, { shouldValidate: true })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={
-                        !clienteSeleccionado
-                          ? "Seleccioná un cliente primero"
-                          : politicasFiltradas.length === 0
-                          ? "Sin políticas para este segmento"
-                          : "Selecciona una política"
-                      } />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {politicasFiltradas.map((politica) => (
-                        <SelectItem key={politica.id} value={politica.id}>
-                          {politica.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                {!clienteSeleccionado && (
-                  <p className="text-xs text-slate-400">
-                    Las políticas se filtran según el segmento del cliente.
-                  </p>
-                )}
-                {clienteSeleccionado && politicasFiltradas.length === 0 && (
-                  <p className="text-xs text-amber-600">
-                    No hay políticas activas para el segmento de este cliente.
-                  </p>
-                )}
-                {errors.politica_id && (
-                  <p className="text-xs text-red-600">{errors.politica_id.message}</p>
-                )}
-              </div>
+          {/* LEFT — campos */}
+          <div className="space-y-4">
+            <h2 className="text-center text-sm font-semibold text-slate-600">
+              Operación de Préstamo
+            </h2>
 
-              <div className="space-y-2">
-                <Label htmlFor="articulo_descripcion">Descripcion del articulo</Label>
-                <Input id="articulo_descripcion" {...register("articulo_descripcion")} />
-                {errors.articulo_descripcion && (
-                  <p className="text-xs text-red-600">
-                    {errors.articulo_descripcion.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>Sistema de amortizacion</Label>
+            {/* Sucursal (plugin) */}
+            {hasSucursalesMulti && (
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-500">Sucursal</Label>
                 <Select
-                  value={currentValues.sistema}
-                  onValueChange={(value) =>
-                    setValue("sistema", value as "frances" | "aleman")
-                  }
+                  value={form.sucursal_id}
+                  onValueChange={(v) => setField("sucursal_id", v)}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Seleccionar..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="frances">Frances (cuota fija)</SelectItem>
-                    <SelectItem value="aleman">Aleman (capital fijo)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Plan de financiacion</Label>
-                <Select
-                  value={currentValues.plan_financiacion_id || "__manual__"}
-                  onValueChange={(value) =>
-                    setValue("plan_financiacion_id", value === "__manual__" ? "" : value)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Tasa manual" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__manual__">Tasa manual</SelectItem>
-                    {planesFiltrados.map((plan) => (
-                      <SelectItem key={plan.id} value={plan.id}>
-                        {plan.nombre}
+                    {sucursales.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.nombre}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+            )}
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="capital">Capital ($)</Label>
-                  <Input
-                    id="capital"
-                    type="number"
-                    step="0.01"
-                    {...register("capital", { valueAsNumber: true })}
-                  />
-                  {errors.capital && <p className="text-xs text-red-600">{errors.capital.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="tasa_mensual">Tasa mensual (%)</Label>
-                  <Input
-                    id="tasa_mensual"
-                    type="number"
-                    step="0.01"
-                    disabled={Boolean(currentValues.plan_financiacion_id)}
-                    {...register("tasa_mensual", { valueAsNumber: true })}
-                  />
-                  {errors.tasa_mensual && (
-                    <p className="text-xs text-red-600">{errors.tasa_mensual.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cantidad_cuotas">Cuotas</Label>
-                  <Input
-                    id="cantidad_cuotas"
-                    type="number"
-                    {...register("cantidad_cuotas", { valueAsNumber: true })}
-                  />
-                  {errors.cantidad_cuotas && (
-                    <p className="text-xs text-red-600">{errors.cantidad_cuotas.message}</p>
-                  )}
-                  {currentValues.plan_financiacion_id && tasaAplicada !== null && (
-                    <p className="text-xs text-amber-700">Tasa aplicada por plan: {tasaAplicada}%</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="fecha_otorgamiento">Fecha de otorgamiento</Label>
-                  <Input id="fecha_otorgamiento" type="date" {...register("fecha_otorgamiento")} />
-                  {errors.fecha_otorgamiento && (
-                    <p className="text-xs text-red-600">{errors.fecha_otorgamiento.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fecha_primer_vencimiento">Primer vencimiento</Label>
-                  <Input
-                    id="fecha_primer_vencimiento"
-                    type="date"
-                    {...register("fecha_primer_vencimiento")}
-                  />
-                  {errors.fecha_primer_vencimiento && (
-                    <p className="text-xs text-red-600">
-                      {errors.fecha_primer_vencimiento.message}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {bloqueos.length > 0 && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  <div className="mb-2 flex items-center gap-2 font-medium">
-                    <AlertTriangle className="h-4 w-4" />
-                    Bloqueos de originacion
+            {/* Cliente */}
+            <div className="space-y-1">
+              <Label className="text-xs text-slate-500">Cliente</Label>
+              <div className="relative">
+                <Input
+                  className="h-9"
+                  placeholder="Buscar por nombre o CUIT..."
+                  value={clienteSearch}
+                  onChange={(e) => {
+                    const q = e.target.value;
+                    setClienteSearch(q);
+                    if (debounceRef.current) clearTimeout(debounceRef.current);
+                    if (!q) {
+                      setClienteResultados([]);
+                      setClienteSeleccionado(null);
+                      setField("cliente_id", "");
+                      return;
+                    }
+                    debounceRef.current = setTimeout(() => {
+                      apiFetch(`/api/fin/clientes?q=${encodeURIComponent(q)}`)
+                        .then((r) => r.json())
+                        .then((d) =>
+                          setClienteResultados(
+                            (d as { clientes?: FinCliente[] }).clientes ?? []
+                          )
+                        );
+                    }, 300);
+                  }}
+                />
+                {clienteResultados.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full rounded-xl border bg-white shadow-lg">
+                    {clienteResultados.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-indigo-50"
+                        onClick={() => {
+                          void loadCliente(c.id);
+                          setClienteResultados([]);
+                        }}
+                      >
+                        <span className="font-medium">{buildLabel(c)}</span>
+                        <span className="text-slate-400 text-xs">{c.cuit}</span>
+                      </button>
+                    ))}
                   </div>
-                  {bloqueos.map((bloqueo) => (
-                    <p key={bloqueo}>{bloqueo}</p>
-                  ))}
-                </div>
+                )}
+              </div>
+              {clienteLoading && (
+                <p className="text-xs text-slate-400">Cargando...</p>
               )}
-
-              {avisos.length > 0 && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  <div className="mb-2 flex items-center gap-2 font-medium">
-                    <ShieldCheck className="h-4 w-4" />
-                    Avisos de control
-                  </div>
-                  {avisos.map((aviso) => (
-                    <p key={aviso}>{aviso}</p>
-                  ))}
-                </div>
+              {clienteSeleccionado && politicaSeleccionada && (
+                <p className="text-xs text-indigo-600">
+                  Política: {politicaSeleccionada.nombre}
+                  {planSeleccionado ? ` · ${planSeleccionado.nombre}` : ""}
+                  {form.tasa_mensual ? ` · ${form.tasa_mensual}% mensual` : ""}
+                </p>
               )}
-
-              <div className="flex gap-3">
-                <Button type="submit" className="flex-1" disabled={bloqueos.length > 0}>
-                  Continuar <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-                <Button type="button" variant="outline" onClick={handleClose}>
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-
-            <div className="space-y-4">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <Wallet className="h-4 w-4" />
-                  Contexto del cliente
-                </div>
-                <dl className="grid gap-3 text-sm">
-                  {[
-                    ["Cliente", clienteSeleccionado ? buildClienteLabel(clienteSeleccionado) : "No seleccionado"],
-                    ["Cupo disponible", ars(cupoDisponible)],
-                    ["Tier actual", tierActual ?? "No disponible"],
-                    ["Linea de credito", lineaCredito?.vigencia?.estado ?? "No disponible"],
-                    ["Politica", politicaSeleccionada?.nombre ?? "No seleccionada"],
-                    ["Plan", planSeleccionado?.nombre ?? "Tasa manual"],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <dt className="text-slate-400">{label}</dt>
-                      <dd className="font-medium text-slate-900">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-slate-600">Vista previa tabla de amortizacion</p>
-                <AmortizationPreviewTable tabla={tabla} loading={tablaLoading} />
-              </div>
+              {clienteSeleccionado && politicasFiltradas.length === 0 && (
+                <p className="text-xs text-amber-600">
+                  Sin política para este segmento.
+                </p>
+              )}
             </div>
-          </div>
-        )}
 
-        {step === 2 && tabla && (
-          <div className="space-y-6">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                {[
-                  ["Cliente", clienteSeleccionado ? buildClienteLabel(clienteSeleccionado) : currentValues.cliente_id],
-                  ["Articulo", currentValues.articulo_descripcion],
-                  ["Capital", currentValues.capital ? ars(currentValues.capital) : "No disponible"],
-                  ["Sistema", currentValues.sistema === "frances" ? "Frances" : "Aleman"],
-                  ["Politica", politicaSeleccionada?.nombre ?? "No seleccionada"],
-                  ["Plan", planSeleccionado?.nombre ?? "Tasa manual"],
-                  ["Tasa mensual", `${tasaAplicada ?? currentValues.tasa_mensual}%`],
-                  ["Cuotas", String(currentValues.cantidad_cuotas)],
-                  ["Total credito", ars(tabla.total_credito)],
-                  ["Total intereses", ars(tabla.total_intereses)],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <dt className="text-slate-400">{label}</dt>
-                    <dd className="font-medium text-slate-900">{value}</dd>
-                  </div>
-                ))}
-              </dl>
+            {/* Compra financiada: bien */}
+            {tipo === "compra_financiada" && (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">
+                    Descripción del bien
+                  </Label>
+                  <Input
+                    className="h-9"
+                    placeholder="Ej: Heladera Samsung 300L"
+                    value={form.articulo_descripcion}
+                    onChange={(e) =>
+                      setField("articulo_descripcion", e.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">
+                    Valor de contado (opcional)
+                  </Label>
+                  <Input
+                    className="h-9"
+                    type="number"
+                    placeholder="$"
+                    value={valorContado}
+                    onChange={(e) => setValorContado(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Monto */}
+            <div className="space-y-1">
+              <Label className="text-xs text-slate-500">Monto</Label>
+              <Input
+                className="h-9"
+                type="number"
+                step="0.01"
+                placeholder="$0,00"
+                value={form.capital}
+                onChange={(e) => setField("capital", e.target.value)}
+              />
+            </div>
+
+            {/* Cuotas */}
+            <div className="space-y-1">
+              <Label className="text-xs text-slate-500">Cuotas</Label>
+              <Input
+                className="h-9"
+                type="number"
+                placeholder="Ej: 12"
+                value={form.cantidad_cuotas}
+                onChange={(e) => setField("cantidad_cuotas", e.target.value)}
+              />
+            </div>
+
+            {/* Fechas (colapsadas, valores por defecto) */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-500">Otorgamiento</Label>
+                <Input
+                  className="h-9 text-xs"
+                  type="date"
+                  value={form.fecha_otorgamiento}
+                  onChange={(e) => setField("fecha_otorgamiento", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-500">1er vencimiento</Label>
+                <Input
+                  className="h-9 text-xs"
+                  type="date"
+                  value={form.fecha_primer_vencimiento}
+                  onChange={(e) =>
+                    setField("fecha_primer_vencimiento", e.target.value)
+                  }
+                />
+              </div>
             </div>
 
             {serverError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                 {serverError}
-              </div>
+              </p>
             )}
 
-            <AmortizationPreviewTable tabla={tabla} loading={false} />
-
-            <div className="flex gap-3">
-              <Button onClick={confirmSubmit} disabled={isSubmitting}>
-                {isSubmitting ? "Otorgando..." : "Confirmar y otorgar"}
-              </Button>
-              <Button variant="outline" onClick={() => setStep(1)}>
-                Volver
-              </Button>
-            </div>
+            <Button
+              className="w-full bg-indigo-600 hover:bg-indigo-700"
+              onClick={handleConfirm}
+              disabled={submitting}
+            >
+              {submitting ? "Procesando..." : "Confirmar Operación"}
+            </Button>
           </div>
-        )}
+
+          {/* RIGHT — resumen de cuotas */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="mb-3 text-center text-sm font-semibold text-slate-600">
+              Resumen de Operación
+            </h3>
+
+            {tablaLoading ? (
+              <p className="text-center text-xs text-slate-400 mt-8">
+                Calculando...
+              </p>
+            ) : !tabla ? (
+              <p className="text-center text-xs text-slate-400 mt-8">
+                Completá monto y cuotas para ver el detalle
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {tabla.cuotas.map((c) => (
+                  <div
+                    key={c.numero_cuota}
+                    className="flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-white"
+                  >
+                    <span className="text-slate-500">
+                      Cuota {c.numero_cuota} · {c.fecha_vencimiento.slice(0, 10)}
+                    </span>
+                    <span className="font-semibold tabular-nums text-slate-800">
+                      {ars(c.total)}
+                    </span>
+                  </div>
+                ))}
+                <div className="mt-3 flex items-center justify-between border-t border-slate-300 pt-2 text-xs font-semibold">
+                  <span className="text-slate-600">Total a pagar</span>
+                  <span className="text-slate-900">{ars(tabla.total_credito)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>Intereses</span>
+                  <span>{ars(tabla.total_intereses)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
