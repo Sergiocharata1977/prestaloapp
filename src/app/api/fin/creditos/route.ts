@@ -72,7 +72,13 @@ function isBadRequestError(error: unknown): boolean {
     error.message.includes('incompleta') ||
     error.message.includes('negativa') ||
     error.message.includes('mayor a cero') ||
-    error.message.includes('entero')
+    error.message.includes('entero') ||
+    error.message.includes('linea disponible') ||
+    error.message.includes('politica') ||
+    error.message.includes('evaluacion') ||
+    error.message.includes('legajo') ||
+    error.message.includes('No hay') ||
+    error.message.includes('La politica')
   );
 }
 
