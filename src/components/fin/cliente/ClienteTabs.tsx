@@ -4,18 +4,16 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-type TabId = "resumen" | "legajo";
-
 type ClienteTabItem = {
-  id: TabId;
+  id: string;
   label: string;
   icon?: ReactNode;
   badge?: string;
 };
 
 interface ClienteTabsProps {
-  activeTab: TabId;
-  onChange: (tab: TabId) => void;
+  activeTab: string;
+  onChange: (tab: string) => void;
   items: ClienteTabItem[];
 }
 
