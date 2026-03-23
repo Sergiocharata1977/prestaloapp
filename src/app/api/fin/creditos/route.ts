@@ -24,8 +24,9 @@ const creditoCreateSchema = z.object({
   cliente_id: z.string().trim().min(1, 'cliente_id requerido'),
   tipo_cliente_id: z.string().trim().min(1).optional(),
   tipo_operacion: z
-    .enum(['consumo', 'empresa', 'cheque_propio', 'cheque_terceros'])
+    .enum(['consumo', 'empresa', 'cheque_propio', 'cheque_terceros', 'compra_financiada'])
     .optional(),
+  valor_contado_bien: z.number().finite().positive().optional(),
   politica_crediticia_id: z.string().trim().min(1).optional(),
   plan_financiacion_id: z.string().trim().min(1).optional(),
   articulo_descripcion: z.string().trim().min(1, 'articulo_descripcion requerido'),
@@ -104,12 +105,17 @@ export const GET = withAuth(async (request: NextRequest, _context, auth) => {
     const clienteId = searchParams.get('clienteId')?.trim() || undefined;
     const sucursalId = searchParams.get('sucursalId')?.trim() || undefined;
     const estado = parseEstado(searchParams.get('estado'));
+    const tipo = searchParams.get('tipo')?.trim() || undefined;
 
-    const creditos = await CreditoService.list(auth.organizationId, {
+    let creditos = await CreditoService.list(auth.organizationId, {
       cliente_id: clienteId,
       sucursal_id: sucursalId,
       estado,
     });
+
+    if (tipo) {
+      creditos = creditos.filter((c) => c.tipo_operacion === tipo);
+    }
 
     return NextResponse.json({ creditos });
   } catch {
@@ -156,6 +162,7 @@ export const POST = withAuth(async (request: NextRequest, _context, auth) => {
       sucursal_id: sucursalId,
       sistema: parseSistema(body.sistema),
       tipo_operacion: parseTipoOperacion(body.tipo_operacion),
+      valor_contado_bien: body.valor_contado_bien,
     };
 
     const result = await CreditoService.crear(

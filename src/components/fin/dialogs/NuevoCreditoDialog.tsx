@@ -310,8 +310,13 @@ export function NuevoCreditoDialog({
         sucursal_id: form.sucursal_id,
         cliente_id: form.cliente_id,
         plan_financiacion_id: form.plan_financiacion_id || undefined,
+        tipo_operacion: tipo === "compra_financiada" ? "compra_financiada" as const : undefined,
         articulo_descripcion:
           tipo === "prestamo" ? "Préstamo personal" : form.articulo_descripcion,
+        valor_contado_bien:
+          tipo === "compra_financiada" && valorContado
+            ? parseFloat(valorContado)
+            : undefined,
         capital,
         tasa_mensual: form.tasa_mensual,
         cantidad_cuotas: cuotas,

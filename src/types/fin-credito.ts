@@ -15,7 +15,7 @@ export type FinCreditoEstado =
   | 'refinanciado'
   | 'incobrable';
 
-export type FinCreditoTipoOperacion = FinPoliticaTipoOperacion;
+export type FinCreditoTipoOperacion = FinPoliticaTipoOperacion | 'compra_financiada';
 
 export interface FinCreditoTipoClienteSnapshot {
   id: string;
@@ -55,6 +55,7 @@ export interface FinCredito {
   articulo_descripcion: string;
   articulo_codigo?: string;
   tipo_operacion?: FinCreditoTipoOperacion;
+  valor_contado_bien?: number;
   politica_crediticia_id?: string;
   plan_financiacion_id?: string;
   tipo_cliente_snapshot?: FinCreditoTipoClienteSnapshot;
@@ -93,6 +94,7 @@ export type FinCreditoCreateInput = {
   articulo_descripcion: string;
   articulo_codigo?: string;
   tipo_operacion?: FinCreditoTipoOperacion;
+  valor_contado_bien?: number;
   politica_crediticia_id?: string;
   plan_financiacion_id?: string;
   tipo_cliente_snapshot?: FinCreditoTipoClienteSnapshot;

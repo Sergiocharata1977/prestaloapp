@@ -20,6 +20,7 @@ import {
   MonitorSmartphone,
   Scale,
   Settings,
+  ShoppingBag,
   Siren,
   UserCircle2,
   Users,
@@ -40,8 +41,9 @@ const mainItems = [
 ];
 
 const operacionesItems = [
-  { href: "/creditos",            label: "Prestamos", icon: CreditCard },
-  { href: "/operaciones-cheques", label: "Cheques",   icon: ClipboardList },
+  { href: "/creditos",            label: "Prestamos",        icon: CreditCard,    capability: undefined },
+  { href: "/operaciones-cheques", label: "Cheques",          icon: ClipboardList, capability: undefined },
+  { href: "/ventas-financiadas",  label: "Venta Financiada", icon: ShoppingBag,   capability: "productos" },
 ];
 
 const accionesItems = [
