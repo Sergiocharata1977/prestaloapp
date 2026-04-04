@@ -209,7 +209,7 @@ const SECTIONS: Section[] = [
       {
         title: "Bandeja mora temprana",
         content: [
-          "Acciones → 'Mora temprana': lista de créditos con cuotas vencidas recientes.",
+          "Control de mora → 'Pre judicial': lista de créditos con cuotas vencidas recientes.",
           "Permite gestión preventiva antes de que avance a estado judicial.",
           "Visualización de días de mora, monto adeudado y datos de contacto del cliente.",
         ],
@@ -217,7 +217,7 @@ const SECTIONS: Section[] = [
       {
         title: "Bandeja judicial",
         content: [
-          "Acciones → 'Judiciales': créditos y operaciones de cheques en estado judicial.",
+          "Control de mora → 'Judicial': créditos y operaciones de cheques en estado judicial.",
           "Concentra en un solo lugar todas las operaciones en instancia de cobro forzado.",
           "Registro de gestiones y avance de estado desde la misma bandeja.",
         ],

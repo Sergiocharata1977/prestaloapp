@@ -44,12 +44,13 @@ const mainItems = [
 const operacionesItems = [
   { href: "/creditos",            label: "Prestamos",        icon: CreditCard,    capability: undefined },
   { href: "/operaciones-cheques", label: "Cheques",          icon: ClipboardList, capability: undefined },
+  { href: "/cta-corriente",       label: "Cta. Cte. Financiada", icon: Wallet,    capability: "cta_cte_comercial" },
   { href: "/ventas-financiadas",  label: "Venta Financiada", icon: ShoppingBag,   capability: "productos" },
 ];
 
 const accionesItems = [
-  { href: "/acciones/mora-temprana", label: "Mora temprana", icon: Siren },
-  { href: "/acciones/judiciales", label: "Judiciales", icon: Gavel },
+  { href: "/acciones/mora-temprana", label: "Pre judicial", icon: Siren },
+  { href: "/acciones/judiciales", label: "Judicial", icon: Gavel },
 ];
 
 const configItems = [
@@ -234,7 +235,7 @@ export function Sidebar() {
 
         <div className="mt-5">
           <CollapsibleSection
-            label="Acciones"
+            label="Control de mora"
             icon={ClipboardList}
             items={accionesItems}
             pathname={pathname}

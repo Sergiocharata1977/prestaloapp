@@ -103,11 +103,11 @@ export default function JudicialesPage() {
     <div className="space-y-6">
       <div className="space-y-2">
         <Badge variant="secondary" className="rounded-full px-3 py-1">
-          Acciones
+          Control de mora
         </Badge>
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-            Judiciales
+            Judicial
           </h1>
           <p className="max-w-3xl text-sm text-slate-500">
             Bandeja consolidada para casos pre-judiciales y judiciales con foco en

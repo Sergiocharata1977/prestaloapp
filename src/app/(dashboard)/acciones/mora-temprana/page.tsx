@@ -93,15 +93,15 @@ export default function MoraTempranaPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
           <Badge variant="secondary" className="rounded-full px-3 py-1">
-            Acciones
+            Control de mora
           </Badge>
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-              Mora temprana
+              Pre judicial
             </h1>
             <p className="max-w-3xl text-sm text-slate-500">
-              Bandeja para los atrasos iniciales. El objetivo es recuperar rapido,
-              documentar bien y cortar el paso a mora severa.
+              Bandeja para la gestion previa a la instancia judicial. El objetivo es
+              intimar, registrar gestiones y cortar el paso a judicializacion.
             </p>
           </div>
         </div>
@@ -156,7 +156,7 @@ export default function MoraTempranaPage() {
               columns={columns}
               data={creditos}
               loading={loading}
-              emptyMessage="No hay creditos en mora temprana."
+              emptyMessage="No hay creditos en etapa pre judicial."
             />
           </CardContent>
         </Card>
