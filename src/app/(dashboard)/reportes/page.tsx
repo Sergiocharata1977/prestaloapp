@@ -249,8 +249,10 @@ export default function ReportesPage() {
 
   return (
     <div className="space-y-8">
-      <section className="flex flex-col gap-4 rounded-[2rem] border border-white/70 bg-white/80 p-6 shadow-[0_16px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
-        <Badge className="w-fit">Reportes operativos</Badge>
+      <section className="chart-panel flex flex-col gap-4 p-6 sm:p-8">
+        <Badge className="w-fit border-amber-200/80 bg-white/80 text-amber-700 shadow-sm">
+          Reportes operativos
+        </Badge>
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
             Lineas, cheques y rechazados
@@ -265,22 +267,35 @@ export default function ReportesPage() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {loading
           ? skeletonCards.map((item) => (
-              <Card key={String(item)}>
-                <CardContent className="flex items-center gap-4 pt-6">
+              <Card
+                key={String(item)}
+                className="overflow-hidden border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.94)_0%,rgba(255,249,240,0.98)_100%)]"
+              >
+                <CardContent className="flex items-center gap-4 p-6">
                   <div className="h-14 w-full animate-pulse rounded-xl bg-slate-200" />
                 </CardContent>
               </Card>
             ))
           : cards.map((item) => (
-              <Card key={item.label}>
-                <CardContent className="flex items-center gap-4 pt-6">
-                  <div className="rounded-2xl bg-amber-100 p-3 text-amber-700">
-                    <item.icon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-500">{item.label}</p>
-                    <p className="text-2xl font-semibold text-slate-900">{item.value}</p>
-                    <p className="text-xs text-slate-500">{item.detail}</p>
+              <Card
+                key={item.label}
+                className="overflow-hidden border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.94)_0%,rgba(255,249,240,0.98)_100%)] shadow-[0_18px_48px_rgba(15,23,42,0.08)]"
+              >
+                <CardContent className="relative p-6">
+                  <div
+                    className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full blur-2xl"
+                    style={{ background: "rgba(245, 158, 11, 0.18)" }}
+                    aria-hidden="true"
+                  />
+                  <div className="flex items-center gap-4">
+                    <div className="rounded-2xl border border-amber-200/70 bg-white/80 p-3 text-amber-700 shadow-[0_10px_24px_rgba(180,83,9,0.08)]">
+                      <item.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
+                      <p className="text-2xl font-semibold text-slate-950">{item.value}</p>
+                      <p className="text-xs text-slate-500">{item.detail}</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -288,8 +303,8 @@ export default function ReportesPage() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden border-white/70 bg-white/90 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
+          <CardHeader className="border-b border-amber-100/80 bg-[linear-gradient(180deg,rgba(255,251,245,0.95)_0%,rgba(255,255,255,0.9)_100%)]">
             <CardTitle>Reporte de lineas consumidas</CardTitle>
             <CardDescription>
               Clientes con limite vigente o consumo actual sobre su linea.
@@ -305,8 +320,8 @@ export default function ReportesPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden border-white/70 bg-white/90 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
+          <CardHeader className="border-b border-amber-100/80 bg-[linear-gradient(180deg,rgba(255,251,245,0.95)_0%,rgba(255,255,255,0.9)_100%)]">
             <CardTitle>Cartera de cheques por estado</CardTitle>
             <CardDescription>Distribucion nominal y cantidad por estado operativo.</CardDescription>
           </CardHeader>
@@ -322,8 +337,8 @@ export default function ReportesPage() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden border-white/70 bg-white/90 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
+          <CardHeader className="border-b border-amber-100/80 bg-[linear-gradient(180deg,rgba(255,251,245,0.95)_0%,rgba(255,255,255,0.9)_100%)]">
             <CardTitle>Reporte de rechazados</CardTitle>
             <CardDescription>Evaluaciones de scoring rechazadas.</CardDescription>
           </CardHeader>
@@ -337,8 +352,8 @@ export default function ReportesPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden border-white/70 bg-white/90 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
+          <CardHeader className="border-b border-amber-100/80 bg-[linear-gradient(180deg,rgba(255,251,245,0.95)_0%,rgba(255,255,255,0.9)_100%)]">
             <CardTitle>Cheques rechazados</CardTitle>
             <CardDescription>Detalle operativo para seguimiento comercial y legal.</CardDescription>
           </CardHeader>

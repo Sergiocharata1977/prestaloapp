@@ -13,9 +13,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { apiFetch } from "@/lib/apiFetch";
 
@@ -92,10 +89,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <section className="flex flex-col gap-4 rounded-[2rem] border border-white/70 bg-white/75 p-6 shadow-[0_16px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
+      <section className="chart-panel flex flex-col gap-4 p-6 sm:p-8">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
-            <Badge className="w-fit">Dashboard operativo</Badge>
+            <Badge className="w-fit border-amber-200/80 bg-white/80 text-amber-700 shadow-sm">
+              Dashboard operativo
+            </Badge>
             <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
               Resumen general
             </h1>
@@ -127,21 +126,31 @@ export default function DashboardPage() {
         {items.map(({ detail, icon: Icon, title, value }) => (
           <Card
             key={title}
-            className="border-white/70 bg-white/88 shadow-[0_18px_48px_rgba(15,23,42,0.08)]"
+            className="overflow-hidden border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.94)_0%,rgba(255,249,240,0.98)_100%)] shadow-[0_18px_48px_rgba(15,23,42,0.08)]"
           >
-            <CardHeader className="flex flex-row items-start justify-between space-y-0">
-              <div className="space-y-1">
-                <CardDescription>{title}</CardDescription>
-                <CardTitle className="text-3xl font-semibold tracking-tight">
-                  {value}
-                </CardTitle>
+            <CardContent className="relative p-6">
+              <div
+                className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full blur-2xl"
+                style={{ background: "rgba(245, 158, 11, 0.18)" }}
+                aria-hidden="true"
+              />
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    {title}
+                  </p>
+                  <p className="text-3xl font-semibold tracking-tight text-slate-950">
+                    {value}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-amber-200/70 bg-white/80 p-3 text-amber-700 shadow-[0_10px_24px_rgba(180,83,9,0.08)]">
+                  <Icon className="h-5 w-5" />
+                </div>
               </div>
-              <div className="rounded-2xl bg-amber-100 p-3 text-amber-700">
-                <Icon className="h-5 w-5" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-slate-500">{detail}</p>
+              <div className="mt-6 h-px bg-gradient-to-r from-amber-200/70 via-amber-100/40 to-transparent" />
+              <p className="mt-4 text-sm text-slate-500">
+                {detail}
+              </p>
             </CardContent>
           </Card>
         ))}
