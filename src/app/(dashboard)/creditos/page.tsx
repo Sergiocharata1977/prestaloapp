@@ -66,7 +66,6 @@ export default function CreditosPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const fetchCreditos = (filtroEstado: string) => {
-    setLoading(true);
     const url =
       filtroEstado !== "todos"
         ? `/api/fin/creditos?estado=${filtroEstado}`
@@ -80,6 +79,11 @@ export default function CreditosPage() {
   useEffect(() => {
     fetchCreditos(estado);
   }, [estado]);
+
+  const handleEstadoChange = (value: string) => {
+    setLoading(true);
+    setEstado(value);
+  };
 
   const summary = useMemo(() => {
     const creditosVigentes = creditos.filter((credito) => credito.estado === "activo");
@@ -102,61 +106,70 @@ export default function CreditosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Creditos</h2>
-          <p className="text-sm text-slate-500">
-            Cartera con otorgamiento rapido y flujo bajo politica para personas y empresas
-          </p>
+      <section className="chart-panel p-6 sm:p-8">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="mb-3">
+              <span className="inline-flex rounded-full border border-amber-200/80 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700 shadow-sm">
+                Cartera activa
+              </span>
+            </div>
+            <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Creditos</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              Cartera con otorgamiento rapido y flujo bajo politica para personas y empresas
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => router.push("/creditos/nuevo")}>
+              Nuevo bajo politica
+            </Button>
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Nuevo rapido
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push("/creditos/nuevo")}>
-            Nuevo bajo politica
-          </Button>
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Nuevo rapido
-          </Button>
-        </div>
-      </div>
+      </section>
 
-      <div className="flex items-center gap-3">
-        <Select value={estado} onValueChange={setEstado}>
-          <SelectTrigger className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="activo">Activos</SelectItem>
-            <SelectItem value="cancelado">Cancelados</SelectItem>
-            <SelectItem value="en_mora">En mora</SelectItem>
-            <SelectItem value="incobrable">Incobrables</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="rounded-[1.5rem] border border-white/70 bg-white/80 p-4 shadow-[0_18px_48px_rgba(15,23,42,0.06)] backdrop-blur">
+        <div className="flex items-center gap-3">
+          <Select value={estado} onValueChange={handleEstadoChange}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="activo">Activos</SelectItem>
+              <SelectItem value="cancelado">Cancelados</SelectItem>
+              <SelectItem value="en_mora">En mora</SelectItem>
+              <SelectItem value="incobrable">Incobrables</SelectItem>
+            </SelectContent>
+          </Select>
 
-        <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
-          <button
-            onClick={() => setView("lista")}
-            className={`rounded p-1.5 transition-colors ${
-              view === "lista"
-                ? "bg-slate-100 text-slate-900"
-                : "text-slate-400 hover:text-slate-600"
-            }`}
-            title="Vista lista"
-          >
-            <List className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setView("tarjetas")}
-            className={`rounded p-1.5 transition-colors ${
-              view === "tarjetas"
-                ? "bg-slate-100 text-slate-900"
-                : "text-slate-400 hover:text-slate-600"
-            }`}
-            title="Vista tarjetas"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </button>
+          <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
+            <button
+              onClick={() => setView("lista")}
+              className={`rounded p-1.5 transition-colors ${
+                view === "lista"
+                  ? "bg-slate-100 text-slate-900"
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
+              title="Vista lista"
+            >
+              <List className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setView("tarjetas")}
+              className={`rounded p-1.5 transition-colors ${
+                view === "tarjetas"
+                  ? "bg-slate-100 text-slate-900"
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
+              title="Vista tarjetas"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -181,14 +194,22 @@ export default function CreditosPage() {
             icon: List,
           },
         ].map(({ icon: Icon, label, value, detail }) => (
-          <Card key={label}>
-            <CardContent className="flex items-center gap-4 pt-6">
-              <div className="rounded-2xl bg-amber-100 p-3 text-amber-700">
+          <Card
+            key={label}
+            className="overflow-hidden border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(255,249,240,0.98)_100%)] shadow-[0_18px_40px_rgba(15,23,42,0.06)]"
+          >
+            <CardContent className="relative p-6">
+              <div
+                className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full blur-2xl"
+                style={{ background: "rgba(245, 158, 11, 0.18)" }}
+                aria-hidden="true"
+              />
+              <div className="rounded-2xl border border-amber-200/70 bg-white/80 p-3 text-amber-700 shadow-[0_10px_24px_rgba(180,83,9,0.08)] w-fit">
                 <Icon className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-sm text-slate-500">{label}</p>
-                <p className="text-2xl font-semibold text-slate-900">{value}</p>
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+                <p className="text-2xl font-semibold text-slate-950">{value}</p>
                 <p className="text-xs text-slate-400">{detail}</p>
               </div>
             </CardContent>
@@ -223,7 +244,7 @@ export default function CreditosPage() {
               <button
                 key={cr.id}
                 onClick={() => router.push(`/creditos/${cr.id}`)}
-                className="group rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all hover:border-amber-300 hover:shadow-md"
+                className="group rounded-2xl border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(255,249,240,0.98)_100%)] p-5 text-left shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition-all hover:border-amber-300 hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -238,21 +259,15 @@ export default function CreditosPage() {
                 <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <p className="text-slate-400">Capital</p>
-                    <p className="font-mono font-semibold text-slate-900">
-                      {ars(cr.capital)}
-                    </p>
+                    <p className="font-mono font-semibold text-slate-900">{ars(cr.capital)}</p>
                   </div>
                   <div>
                     <p className="text-slate-400">Saldo</p>
-                    <p className="font-mono font-semibold text-slate-900">
-                      {ars(cr.saldo_capital)}
-                    </p>
+                    <p className="font-mono font-semibold text-slate-900">{ars(cr.saldo_capital)}</p>
                   </div>
                   <div>
                     <p className="text-slate-400">Sistema</p>
-                    <p className="text-slate-700">
-                      {cr.sistema === "frances" ? "Frances" : "Aleman"}
-                    </p>
+                    <p className="text-slate-700">{cr.sistema === "frances" ? "Frances" : "Aleman"}</p>
                   </div>
                   <div>
                     <p className="text-slate-400">Cuotas</p>
@@ -271,7 +286,10 @@ export default function CreditosPage() {
       <NuevoCreditoDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onSuccess={() => fetchCreditos(estado)}
+        onSuccess={() => {
+          setLoading(true);
+          fetchCreditos(estado);
+        }}
       />
     </div>
   );
