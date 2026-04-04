@@ -22,6 +22,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { ChartCard, ChartTooltipCard } from "@/components/fin/charts/ChartCard";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -187,13 +188,16 @@ function BarTooltip({
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border bg-white px-3 py-2 text-sm shadow-md">
-      <p className="font-medium text-slate-700">{label}</p>
-      <p className="text-slate-500">
-        Total:{" "}
-        <span className="font-semibold text-slate-900">{ars(payload[0].value)}</span>
-      </p>
-    </div>
+    <ChartTooltipCard
+      title={label}
+      rows={[
+        {
+          label: payload[0].payload.isVencido ? "Vencido" : "Proyectado",
+          value: ars(payload[0].value),
+          color: payload[0].payload.isVencido ? "#dc2626" : "#c2410c",
+        },
+      ]}
+    />
   );
 }
 
@@ -211,13 +215,30 @@ function GraficoBarras({ data }: { data: ProyeccionCobranzasResponse }) {
   const maxVal = Math.max(...chartData.map((d) => d.total), 1);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-4 text-sm font-semibold text-slate-700">
-        Cobranza proyectada por mes
-      </h2>
+    <ChartCard
+      eyebrow="Proyeccion"
+      title="Cobranza proyectada por mes"
+      description="Visual rapido de concentracion mensual, con separacion entre saldo por vencer y vencido."
+      metricLabel="Total proyectado"
+      metricValue={ars(data.grandTotal)}
+      legend={[
+        { label: "Por vencer", color: "#c2410c" },
+        { label: "Vencido", color: "#dc2626" },
+      ]}
+    >
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+          <defs>
+            <linearGradient id="proyeccionBar" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ea580c" />
+              <stop offset="100%" stopColor="#f59e0b" />
+            </linearGradient>
+            <linearGradient id="proyeccionBarVencida" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#dc2626" />
+              <stop offset="100%" stopColor="#fca5a5" />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="4 4" stroke="rgba(148, 163, 184, 0.22)" vertical={false} />
           <XAxis
             dataKey="label"
             tick={{ fontSize: 11, fill: "#94a3b8" }}
@@ -238,18 +259,18 @@ function GraficoBarras({ data }: { data: ProyeccionCobranzasResponse }) {
             tickLine={false}
             width={56}
           />
-          <Tooltip content={<BarTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
-          <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+          <Tooltip content={<BarTooltip />} cursor={{ fill: "rgba(180,83,9,0.08)" }} />
+          <Bar dataKey="total" radius={[8, 8, 0, 0]} maxBarSize={42}>
             {chartData.map((entry, idx) => (
               <Cell
                 key={idx}
-                fill={entry.isVencido ? "#fca5a5" : "#f59e0b"}
+                fill={entry.isVencido ? "url(#proyeccionBarVencida)" : "url(#proyeccionBar)"}
               />
             ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </ChartCard>
   );
 }
 
@@ -274,11 +295,10 @@ function DetalleDrawer({
   onClose: () => void;
 }) {
   const [detalle, setDetalle] = useState<ProyeccionDetalleResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    setDetalle(null);
+    let cancelled = false;
     const params = new URLSearchParams({
       groupId: target.groupId,
       monthKey: target.monthKey,
@@ -287,8 +307,18 @@ function DetalleDrawer({
     });
     apiFetch(`/api/fin/reportes/proyeccion-cobranzas/detalle?${params}`)
       .then((r) => r.json())
-      .then((d) => setDetalle(d as ProyeccionDetalleResponse))
-      .finally(() => setLoading(false));
+      .then((d) => {
+        if (cancelled) return;
+        setDetalle(d as ProyeccionDetalleResponse);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [target]);
 
   return (
@@ -796,7 +826,11 @@ export default function ProyeccionCobranzasPage() {
 
       {/* ── Drawer drill-down ── */}
       {drilldown && (
-        <DetalleDrawer target={drilldown} onClose={() => setDrilldown(null)} />
+        <DetalleDrawer
+          key={`${drilldown.groupId}-${drilldown.monthKey}`}
+          target={drilldown}
+          onClose={() => setDrilldown(null)}
+        />
       )}
     </div>
   );

@@ -17,14 +17,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  LineChart,
   Line,
+  Area,
+  AreaChart,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { ChartCard, ChartTooltipCard } from "@/components/fin/charts/ChartCard";
 import { apiFetch } from "@/lib/apiFetch";
 import type { IndicadoresComercialesResponse } from "@/types/fin-indicadores-comerciales";
 
@@ -97,15 +99,16 @@ function CustomTooltip({
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border bg-white px-3 py-2 text-sm shadow-md">
-      <p className="font-medium text-slate-700">{label}</p>
-      <p className="text-slate-500">
-        Ticket:{" "}
-        <span className="font-semibold text-slate-900">
-          {ars(payload[0].value)}
-        </span>
-      </p>
-    </div>
+    <ChartTooltipCard
+      title={label}
+      rows={[
+        {
+          label: "Ticket promedio",
+          value: ars(payload[0].value),
+          color: "#c2410c",
+        },
+      ]}
+    />
   );
 }
 
@@ -217,11 +220,16 @@ export default function IndicadoresComercialesPage() {
       </div>
 
       {/* Tendencia mensual — línea */}
-      <div className="rounded-2xl border bg-white p-6">
-        <h2 className="mb-4 text-sm font-semibold text-slate-700">
-          Tendencia de ticket promedio mensual
-        </h2>
-
+      <ChartCard
+        eyebrow="Analitica comercial"
+        title="Tendencia de ticket promedio mensual"
+        description="Vista historica del ticket para detectar aceleracion comercial, estacionalidad y cambios de mezcla de cartera."
+        metricLabel="Ticket actual"
+        metricValue={
+          tendencia.length > 0 ? ars(tendencia[tendencia.length - 1].ticketPromedio) : undefined
+        }
+        legend={[{ label: "Ticket promedio", color: "#c2410c" }]}
+      >
         {loading ? (
           <div className="flex h-64 items-center justify-center text-sm text-slate-400">
             Cargando...
@@ -232,11 +240,18 @@ export default function IndicadoresComercialesPage() {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
-            <LineChart
+            <AreaChart
               data={tendencia}
               margin={{ top: 4, right: 16, left: 16, bottom: 4 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <defs>
+                <linearGradient id="indicadoresArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ea580c" stopOpacity={0.36} />
+                  <stop offset="75%" stopColor="#f59e0b" stopOpacity={0.08} />
+                  <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="4 4" stroke="rgba(148, 163, 184, 0.22)" vertical={false} />
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 11, fill: "#94a3b8" }}
@@ -256,18 +271,24 @@ export default function IndicadoresComercialesPage() {
                 tickLine={false}
               />
               <Tooltip content={<CustomTooltip />} />
+              <Area
+                type="monotone"
+                dataKey="ticketPromedio"
+                stroke="none"
+                fill="url(#indicadoresArea)"
+              />
               <Line
                 type="monotone"
                 dataKey="ticketPromedio"
-                stroke="#f59e0b"
-                strokeWidth={2}
-                dot={{ r: 3, fill: "#f59e0b" }}
-                activeDot={{ r: 5 }}
+                stroke="#c2410c"
+                strokeWidth={3}
+                dot={{ r: 0 }}
+                activeDot={{ r: 6, fill: "#c2410c", stroke: "#fff7ed", strokeWidth: 2 }}
               />
-            </LineChart>
+            </AreaChart>
           </ResponsiveContainer>
         )}
-      </div>
+      </ChartCard>
 
       {/* Tablas de mix */}
       <div className="grid gap-6 lg:grid-cols-2">
