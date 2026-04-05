@@ -103,11 +103,13 @@ function NavLink({
     <Link
       href={href}
       className={cn(
-        "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium text-slate-300 transition-colors hover:bg-white/8 hover:text-white",
-        isActive && "bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+        "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400",
+        isActive
+          ? "bg-amber-500/10 text-amber-200 ring-1 ring-amber-400/15"
+          : "text-slate-400 hover:bg-white/6 hover:text-white"
       )}
     >
-      <Icon className="h-4 w-4" />
+      <Icon className="h-4 w-4 shrink-0" />
       <span>{label}</span>
     </Link>
   );
@@ -143,10 +145,10 @@ function CollapsibleSection({
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition-colors",
+          "flex w-full cursor-pointer items-center justify-between rounded-xl px-4 py-2.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400",
           isActive
-            ? "bg-white/10 text-white"
-            : "text-slate-400 hover:bg-white/8 hover:text-white"
+            ? "bg-amber-500/10 text-amber-200 ring-1 ring-amber-400/15"
+            : "text-slate-400 hover:bg-white/6 hover:text-white"
         )}
       >
         <span className="flex items-center gap-3">
@@ -161,7 +163,7 @@ function CollapsibleSection({
       </button>
 
       {open && (
-        <div className="ml-3 mt-1 grid gap-1 border-l border-white/10 pl-3">
+        <div className="ml-3 mt-1 grid gap-0.5 border-l border-white/8 pl-3">
           {visibleItems.map(({ href, icon, label: itemLabel }) => (
             <NavLink key={href} href={href} icon={icon} label={itemLabel} pathname={pathname} />
           ))}
@@ -200,14 +202,17 @@ export function Sidebar() {
         </div>
 
         {/* Main nav */}
-        <nav className="mt-6 grid gap-1">
+        <nav className="mt-6 grid gap-0.5">
           {mainItems.map(({ href, icon, label }) => (
             <NavLink key={href} href={href} icon={icon} label={label} pathname={pathname} />
           ))}
         </nav>
 
         {/* Operaciones — desplegable */}
-        <div className="mt-5">
+        <div className="mt-5 border-t border-white/[0.07] pt-4">
+          <p className="mb-1 px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">
+            Operaciones
+          </p>
           <CollapsibleSection
             label="Operaciones"
             icon={Layers}
@@ -217,7 +222,10 @@ export function Sidebar() {
         </div>
 
         {/* Reportes — desplegable */}
-        <div className="mt-5">
+        <div className="mt-4 border-t border-white/[0.07] pt-4">
+          <p className="mb-1 px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">
+            Analítica
+          </p>
           <CollapsibleSection
             label="Reportes"
             icon={FileText}
@@ -226,14 +234,11 @@ export function Sidebar() {
           />
         </div>
 
-        {/* Bottom nav */}
-        <nav className="mt-5 grid gap-1">
-          {bottomItems.map(({ href, icon, label }) => (
-            <NavLink key={href} href={href} icon={icon} label={label} pathname={pathname} />
-          ))}
-        </nav>
-
-        <div className="mt-5">
+        {/* Control de mora */}
+        <div className="mt-4 border-t border-white/[0.07] pt-4">
+          <p className="mb-1 px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">
+            Gestión
+          </p>
           <CollapsibleSection
             label="Control de mora"
             icon={ClipboardList}
@@ -242,23 +247,31 @@ export function Sidebar() {
           />
         </div>
 
-        {/* Configuracion — desplegable */}
-        <div className="mt-5">
+        {/* Configuracion + Manual */}
+        <div className="mt-4 border-t border-white/[0.07] pt-4">
+          <p className="mb-1 px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">
+            Config
+          </p>
           <CollapsibleSection
             label="Configuracion"
             icon={Settings}
             items={configItems}
             pathname={pathname}
           />
+          <nav className="mt-0.5 grid gap-0.5">
+            {bottomItems.map(({ href, icon, label }) => (
+              <NavLink key={href} href={href} icon={icon} label={label} pathname={pathname} />
+            ))}
+          </nav>
         </div>
 
         {/* IT / Gobierno */}
         {visibleCapabilityItems.length > 0 && (
-          <div className="mt-8">
-            <p className="px-4 text-xs uppercase tracking-[0.24em] text-slate-500">
+          <div className="mt-4 border-t border-white/[0.07] pt-4">
+            <p className="mb-1 px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">
               IT / Gobierno
             </p>
-            <nav className="mt-3 grid gap-1">
+            <nav className="grid gap-0.5">
               {visibleCapabilityItems.map(({ href, icon, label }) => (
                 <NavLink key={href} href={href} icon={icon} label={label} pathname={pathname} />
               ))}

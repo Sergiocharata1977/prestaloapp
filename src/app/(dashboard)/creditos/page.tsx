@@ -29,7 +29,7 @@ const columns: Column<FinCredito>[] = [
     key: "capital",
     header: "Capital",
     render: (r) => ars(r.capital),
-    className: "text-right font-mono",
+    className: "text-right font-mono tabular-nums",
   },
   {
     key: "sistema",
@@ -40,12 +40,13 @@ const columns: Column<FinCredito>[] = [
     key: "cantidad_cuotas",
     header: "Cuotas",
     render: (r) => `${r.cuotas_pagas}/${r.cantidad_cuotas}`,
+    className: "tabular-nums",
   },
   {
     key: "saldo_capital",
     header: "Saldo",
     render: (r) => ars(r.saldo_capital),
-    className: "text-right font-mono",
+    className: "text-right font-mono tabular-nums",
   },
   {
     key: "estado",
@@ -149,7 +150,7 @@ export default function CreditosPage() {
           <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
             <button
               onClick={() => setView("lista")}
-              className={`rounded p-1.5 transition-colors ${
+              className={`cursor-pointer rounded p-1.5 transition-colors ${
                 view === "lista"
                   ? "bg-slate-100 text-slate-900"
                   : "text-slate-400 hover:text-slate-600"
@@ -160,7 +161,7 @@ export default function CreditosPage() {
             </button>
             <button
               onClick={() => setView("tarjetas")}
-              className={`rounded p-1.5 transition-colors ${
+              className={`cursor-pointer rounded p-1.5 transition-colors ${
                 view === "tarjetas"
                   ? "bg-slate-100 text-slate-900"
                   : "text-slate-400 hover:text-slate-600"
@@ -180,20 +181,29 @@ export default function CreditosPage() {
             value: ars(summary.carteraSinVencer),
             detail: `${summary.creditosVigentes} credito(s) vigentes`,
             icon: WalletCards,
+            iconBg: "bg-emerald-500/10 border-emerald-200/70 text-emerald-700",
+            iconShadow: "rgba(5,150,105,0.08)",
+            glow: "rgba(16,185,129,0.13)",
           },
           {
             label: "Capital colocado",
             value: ars(summary.capitalColocado),
             detail: `${creditos.length} operacion(es) en vista`,
             icon: CircleDollarSign,
+            iconBg: "bg-blue-500/10 border-blue-200/70 text-blue-700",
+            iconShadow: "rgba(29,78,216,0.07)",
+            glow: "rgba(37,99,235,0.10)",
           },
           {
             label: "Creditos vigentes",
             value: String(summary.creditosVigentes),
             detail: "Solo estado activo",
             icon: List,
+            iconBg: "bg-amber-500/10 border-amber-200/70 text-amber-700",
+            iconShadow: "rgba(180,83,9,0.08)",
+            glow: "rgba(245,158,11,0.18)",
           },
-        ].map(({ icon: Icon, label, value, detail }) => (
+        ].map(({ icon: Icon, label, value, detail, iconBg, iconShadow, glow }) => (
           <Card
             key={label}
             className="overflow-hidden border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(255,249,240,0.98)_100%)] shadow-[0_18px_40px_rgba(15,23,42,0.06)]"
@@ -201,15 +211,17 @@ export default function CreditosPage() {
             <CardContent className="relative p-6">
               <div
                 className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full blur-2xl"
-                style={{ background: "rgba(245, 158, 11, 0.18)" }}
+                style={{ background: glow }}
                 aria-hidden="true"
               />
-              <div className="rounded-2xl border border-amber-200/70 bg-white/80 p-3 text-amber-700 shadow-[0_10px_24px_rgba(180,83,9,0.08)] w-fit">
+              <div className={`w-fit rounded-2xl border p-3 shadow-[0_10px_24px_var(--icon-shadow)] ${iconBg}`}
+                style={{ "--icon-shadow": iconShadow } as React.CSSProperties}
+              >
                 <Icon className="h-5 w-5" />
               </div>
               <div className="mt-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-                <p className="text-2xl font-semibold text-slate-950">{value}</p>
+                <p className="tabular-nums text-2xl font-semibold text-slate-950">{value}</p>
                 <p className="text-xs text-slate-400">{detail}</p>
               </div>
             </CardContent>
