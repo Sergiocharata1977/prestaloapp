@@ -18,6 +18,10 @@ export const PUT = withAuth(
       intereses_no_devengados: string;
       ventas_financiadas: string;
       intereses_ganados: string;
+      cuenta_creditos_ctacte?: string;
+      cuenta_ventas_ctacte?: string;
+      cuenta_ingresos_mora?: string;
+      cuenta_ingresos_gastos_adm?: string;
     };
     const required = ["creditos_por_financiaciones", "intereses_no_devengados", "ventas_financiadas", "intereses_ganados"];
     if (required.some((k) => !body[k as keyof typeof body])) {

@@ -36,5 +36,26 @@ export interface FinConfigCuentas {
     intereses_no_devengados: string;
     ventas_financiadas: string;
     intereses_ganados: string;
+    creditos_ctacte?: string;
+    ventas_ctacte?: string;
+    ingresos_mora_ctacte?: string;
+    ingresos_gastos_adm?: string;
+    caja_default?: string;
+    cuenta_creditos_ctacte?: string;
+    cuenta_ventas_ctacte?: string;
+    cuenta_ingresos_mora?: string;
+    cuenta_ingresos_gastos_adm?: string;
+  };
+}
+
+export interface FinConfigCtaCte {
+  organization_id: string;
+  plugin: string;
+  cuentas: {
+    creditos_ctacte: string;
+    ventas_ctacte: string;
+    ingresos_mora_ctacte: string;
+    ingresos_gastos_adm: string;
+    caja_default: string;
   };
 }

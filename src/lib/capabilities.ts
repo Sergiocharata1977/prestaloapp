@@ -4,6 +4,8 @@ export const CAPABILITIES = {
   ANALYTICS_COMERCIAL:  'analytics_comercial',
   SUCURSALES_MULTI:     'sucursales_multi',
   PRODUCTOS:            'productos',
+  CTA_CTE_COMERCIAL:   'cta_cte_comercial',
+  STOCK_MERCADERIA:    'stock_mercaderia',
 } as const;
 
 export type Capability = typeof CAPABILITIES[keyof typeof CAPABILITIES];
@@ -29,5 +31,15 @@ export const PLUGIN_CAPABILITIES: { value: Capability; label: string; descriptio
     value: CAPABILITIES.PRODUCTOS,
     label: 'Productos y Compra Financiada',
     description: 'ABM de productos, tasas por segmento y financiación de bienes con valor de contado',
+  },
+  {
+    value: CAPABILITIES.CTA_CTE_COMERCIAL,
+    label: 'Cuenta Corriente Financiada',
+    description: 'Venta de mercadería a crédito flexible: saldo vivo, entregas parciales y control mensual de cumplimiento',
+  },
+  {
+    value: CAPABILITIES.STOCK_MERCADERIA,
+    label: 'Stock de MercaderÃ­a',
+    description: 'CatÃ¡logo de productos, control de inventario y descuento automÃ¡tico de stock en ventas financiadas y cta. cte.',
   },
 ];

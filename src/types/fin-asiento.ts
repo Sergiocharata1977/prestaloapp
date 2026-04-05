@@ -2,6 +2,10 @@ export type FinAsientoOrigen =
   | 'credito_otorgado'
   | 'cobro_cuota'
   | 'descuento_cheque_liquidado'
+  | 'ctacte_venta_inicial'
+  | 'ctacte_pago_cliente'
+  | 'ctacte_mora'
+  | 'ctacte_gasto_fijo'
   | 'ajuste_manual';
 
 export interface FinAsientoLinea {

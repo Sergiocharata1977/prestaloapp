@@ -56,6 +56,7 @@ const accionesItems = [
 const configItems = [
   { href: "/tipos-cliente",          label: "Tipos cliente",   icon: Users },
   { href: "/politicas-crediticias",  label: "Politicas",       icon: Scale },
+  { href: "/configuracion/ctacte-politicas", label: "Cta. Cte. Politicas", icon: Scale, capability: "cta_cte_comercial" },
   { href: "/planes-financiacion",    label: "Planes",          icon: BookOpenText },
   { href: "/cajas",                  label: "Cajas",           icon: BriefcaseBusiness },
   { href: "/usuarios",               label: "Usuarios",        icon: UserCircle2 },

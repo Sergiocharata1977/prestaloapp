@@ -40,6 +40,26 @@ export const FIN_COLLECTIONS = {
   operacionesCheques: (orgId: string) =>
     `organizations/${orgId}/fin_operaciones_cheque`,
 
+  ctaCteOperaciones: (orgId: string) =>
+    `organizations/${orgId}/fin_ctacte_operaciones`,
+  ctaCteOperacion: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_ctacte_operaciones/${id}`,
+
+  ctaCteMovimientos: (orgId: string) =>
+    `organizations/${orgId}/fin_ctacte_movimientos`,
+  ctaCteMovimiento: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_ctacte_movimientos/${id}`,
+
+  ctaCteControlMensual: (orgId: string) =>
+    `organizations/${orgId}/fin_ctacte_control_mensual`,
+  ctaCteControlDoc: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_ctacte_control_mensual/${id}`,
+
+  ctaCtePoliticas: (orgId: string) =>
+    `organizations/${orgId}/fin_ctacte_politicas`,
+  ctaCtePolitica: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_ctacte_politicas/${id}`,
+
   cuotas: (orgId: string) => `organizations/${orgId}/fin_cuotas`,
   cuota: (orgId: string, id: string) =>
     `organizations/${orgId}/fin_cuotas/${id}`,
@@ -85,4 +105,26 @@ export const FIN_COLLECTIONS = {
     `organizations/${orgId}/fin_configuracion/scoring`,
   clienteNosisConsultas: (orgId: string, clienteId: string) =>
     `organizations/${orgId}/fin_clientes/${clienteId}/fin_consultas_nosis`,
+  moraAcciones: (orgId: string) => `organizations/${orgId}/fin_mora_acciones`,
+  moraAccion: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_mora_acciones/${id}`,
+
+  // ── Plugin Stock de Mercadería ──────────────────────────────────────────────
+  stockCategorias: (orgId: string) =>
+    `organizations/${orgId}/fin_stock_categorias`,
+  stockCategoria: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_stock_categorias/${id}`,
+
+  stockProductos: (orgId: string) =>
+    `organizations/${orgId}/fin_stock_productos`,
+  stockProducto: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_stock_productos/${id}`,
+
+  stockMovimientos: (orgId: string) =>
+    `organizations/${orgId}/fin_stock_movimientos`,
+  stockMovimiento: (orgId: string, id: string) =>
+    `organizations/${orgId}/fin_stock_movimientos/${id}`,
+
+  stockMovimientosProducto: (orgId: string, productoId: string) =>
+    `organizations/${orgId}/fin_stock_movimientos?producto_id=${productoId}`,
 } as const;

@@ -2,11 +2,18 @@ import { getAdminFirestore } from '@/firebase/admin';
 import { FIN_COLLECTIONS } from '@/firebase/collections';
 import type { FinAsiento, FinAsientoLinea } from '@/types/fin-asiento';
 import type { FinCobro } from '@/types/fin-cobro';
+import type { FinCtaCteMovimiento, FinCtaCteOperacion } from '@/types/fin-ctacte';
 import type { FinCredito } from '@/types/fin-credito';
 import type { FinOperacionCheque } from '@/types/fin-operacion-cheque';
 import type { FinConfigCuentas, FinCuenta } from '@/types/fin-plan-cuentas';
 
 type CuentaContable = Pick<FinCuenta, 'id' | 'codigo' | 'nombre'>;
+type CtaCteConfig = {
+  cuenta_creditos_ctacte: string;
+  cuenta_ventas_ctacte: string;
+  cuenta_ingresos_mora: string;
+  cuenta_ingresos_gastos_adm: string;
+};
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -286,6 +293,214 @@ export class JournalEntryService {
     return asiento.id;
   }
 
+  static async generarAsientoCtaCteVentaInicial(
+    operacion: FinCtaCteOperacion,
+    config: CtaCteConfig,
+    usuarioId: string,
+    usuarioNombre: string,
+    options: {
+      transaction?: FirebaseFirestore.Transaction;
+      asientoId?: string;
+    } = {}
+  ): Promise<string> {
+    const [cuentaCreditos, cuentaVentas] = await Promise.all([
+      this.getCuenta(operacion.organization_id, config.cuenta_creditos_ctacte, options),
+      this.getCuenta(operacion.organization_id, config.cuenta_ventas_ctacte, options),
+    ]);
+
+    const lineas: FinAsientoLinea[] = [
+      buildLinea(
+        cuentaCreditos,
+        `Alta cuenta corriente ${operacion.comprobante} - saldo inicial`,
+        operacion.monto_original,
+        0
+      ),
+      buildLinea(
+        cuentaVentas,
+        `Alta cuenta corriente ${operacion.comprobante} - venta`,
+        0,
+        operacion.monto_original
+      ),
+    ];
+
+    this.validarBalance(lineas);
+    return this.persistAsiento(
+      {
+        id:
+          options.asientoId ??
+          getAdminFirestore().collection(FIN_COLLECTIONS.asientos(operacion.organization_id)).doc()
+            .id,
+        organization_id: operacion.organization_id,
+        sucursal_id: operacion.sucursal_id ?? '',
+        origen: 'ctacte_venta_inicial',
+        documento_id: operacion.id,
+        documento_tipo: 'ctacte_operacion',
+        fecha: operacion.fecha_venta,
+        lineas,
+        usuarioId,
+        usuarioNombre,
+      },
+      options
+    );
+  }
+
+  static async generarAsientoCtaCtePagoCliente(
+    movimiento: FinCtaCteMovimiento,
+    operacion: FinCtaCteOperacion,
+    cajaAccountId: string,
+    config: CtaCteConfig,
+    usuarioId: string,
+    usuarioNombre: string,
+    options: {
+      transaction?: FirebaseFirestore.Transaction;
+      asientoId?: string;
+    } = {}
+  ): Promise<string> {
+    const [cuentaCaja, cuentaCreditos] = await Promise.all([
+      this.getCuenta(operacion.organization_id, cajaAccountId, options),
+      this.getCuenta(operacion.organization_id, config.cuenta_creditos_ctacte, options),
+    ]);
+
+    const lineas: FinAsientoLinea[] = [
+      buildLinea(
+        cuentaCaja,
+        `Pago cuenta corriente ${operacion.comprobante} - ingreso`,
+        movimiento.importe,
+        0
+      ),
+      buildLinea(
+        cuentaCreditos,
+        `Pago cuenta corriente ${operacion.comprobante} - cancelacion saldo`,
+        0,
+        movimiento.importe
+      ),
+    ];
+
+    this.validarBalance(lineas);
+    return this.persistAsiento(
+      {
+        id:
+          options.asientoId ??
+          getAdminFirestore().collection(FIN_COLLECTIONS.asientos(operacion.organization_id)).doc()
+            .id,
+        organization_id: operacion.organization_id,
+        sucursal_id: operacion.sucursal_id ?? '',
+        origen: 'ctacte_pago_cliente',
+        documento_id: movimiento.id,
+        documento_tipo: 'ctacte_movimiento',
+        fecha: movimiento.fecha,
+        lineas,
+        usuarioId,
+        usuarioNombre,
+      },
+      options
+    );
+  }
+
+  static async generarAsientoCtaCteMora(
+    movimiento: FinCtaCteMovimiento,
+    operacion: FinCtaCteOperacion,
+    config: CtaCteConfig,
+    usuarioId: string,
+    usuarioNombre: string,
+    options: {
+      transaction?: FirebaseFirestore.Transaction;
+      asientoId?: string;
+    } = {}
+  ): Promise<string> {
+    const [cuentaCreditos, cuentaIngresosMora] = await Promise.all([
+      this.getCuenta(operacion.organization_id, config.cuenta_creditos_ctacte, options),
+      this.getCuenta(operacion.organization_id, config.cuenta_ingresos_mora, options),
+    ]);
+
+    const lineas: FinAsientoLinea[] = [
+      buildLinea(
+        cuentaCreditos,
+        `Mora cuenta corriente ${operacion.comprobante} - incremento saldo`,
+        movimiento.importe,
+        0
+      ),
+      buildLinea(
+        cuentaIngresosMora,
+        `Mora cuenta corriente ${operacion.comprobante} - ingreso`,
+        0,
+        movimiento.importe
+      ),
+    ];
+
+    this.validarBalance(lineas);
+    return this.persistAsiento(
+      {
+        id:
+          options.asientoId ??
+          getAdminFirestore().collection(FIN_COLLECTIONS.asientos(operacion.organization_id)).doc()
+            .id,
+        organization_id: operacion.organization_id,
+        sucursal_id: operacion.sucursal_id ?? '',
+        origen: 'ctacte_mora',
+        documento_id: movimiento.id,
+        documento_tipo: 'ctacte_movimiento',
+        fecha: movimiento.fecha,
+        lineas,
+        usuarioId,
+        usuarioNombre,
+      },
+      options
+    );
+  }
+
+  static async generarAsientoCtaCteGastoFijo(
+    movimiento: FinCtaCteMovimiento,
+    operacion: FinCtaCteOperacion,
+    config: CtaCteConfig,
+    usuarioId: string,
+    usuarioNombre: string,
+    options: {
+      transaction?: FirebaseFirestore.Transaction;
+      asientoId?: string;
+    } = {}
+  ): Promise<string> {
+    const [cuentaCreditos, cuentaIngresosGastosAdm] = await Promise.all([
+      this.getCuenta(operacion.organization_id, config.cuenta_creditos_ctacte, options),
+      this.getCuenta(operacion.organization_id, config.cuenta_ingresos_gastos_adm, options),
+    ]);
+
+    const lineas: FinAsientoLinea[] = [
+      buildLinea(
+        cuentaCreditos,
+        `Gasto administrativo cuenta corriente ${operacion.comprobante}`,
+        movimiento.importe,
+        0
+      ),
+      buildLinea(
+        cuentaIngresosGastosAdm,
+        `Gasto administrativo cuenta corriente ${operacion.comprobante}`,
+        0,
+        movimiento.importe
+      ),
+    ];
+
+    this.validarBalance(lineas);
+    return this.persistAsiento(
+      {
+        id:
+          options.asientoId ??
+          getAdminFirestore().collection(FIN_COLLECTIONS.asientos(operacion.organization_id)).doc()
+            .id,
+        organization_id: operacion.organization_id,
+        sucursal_id: operacion.sucursal_id ?? '',
+        origen: 'ctacte_gasto_fijo',
+        documento_id: movimiento.id,
+        documento_tipo: 'ctacte_movimiento',
+        fecha: movimiento.fecha,
+        lineas,
+        usuarioId,
+        usuarioNombre,
+      },
+      options
+    );
+  }
+
   private static validarBalance(lineas: FinAsientoLinea[]): void {
     const totalDebe = round2(
       lineas.reduce((acc, linea) => acc + Number(linea.debe || 0), 0)
@@ -379,6 +594,25 @@ export class JournalEntryService {
       codigo: cuenta.codigo,
       nombre: cuenta.nombre,
     };
+  }
+
+  private static async persistAsiento(
+    input: Parameters<typeof JournalEntryService.buildAsiento>[0],
+    options: {
+      transaction?: FirebaseFirestore.Transaction;
+    } = {}
+  ): Promise<string> {
+    const db = getAdminFirestore();
+    const asientoRef = db.doc(FIN_COLLECTIONS.asiento(input.organization_id, input.id));
+    const asiento = this.buildAsiento(input);
+
+    if (options.transaction) {
+      options.transaction.set(asientoRef, asiento);
+    } else {
+      await asientoRef.set(asiento);
+    }
+
+    return asiento.id;
   }
 
   private static buildAsiento(input: {

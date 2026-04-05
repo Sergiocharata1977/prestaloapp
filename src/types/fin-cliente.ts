@@ -1,4 +1,5 @@
 import type { EvaluacionTier } from '@/types/fin-evaluacion';
+import type { FinMoraEtapa } from "@/types/fin-mora";
 
 export type FinClienteTipo = 'fisica' | 'juridica';
 export type FinClienteLegajoEstado = 'completo' | 'incompleto';
@@ -100,6 +101,11 @@ export interface FinCliente {
   evaluacion_vigente_hasta?: string;
   nosis_ultimo?: FinClienteNosisUltimo;
   legajo?: FinClienteLegajo;
+  gestion_mora_etapa?: FinMoraEtapa;
+  gestion_mora_motivo?: string;
+  gestion_mora_updated_at?: string;
+  gestion_mora_updated_by?: string;
+  gestion_mora_proxima_accion_at?: string;
   creditos_activos_count: number;
   saldo_total_adeudado: number;
   created_at: string;
