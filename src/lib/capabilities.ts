@@ -39,7 +39,7 @@ export const PLUGIN_CAPABILITIES: { value: Capability; label: string; descriptio
   },
   {
     value: CAPABILITIES.STOCK_MERCADERIA,
-    label: 'Stock de MercaderÃ­a',
-    description: 'CatÃ¡logo de productos, control de inventario y descuento automÃ¡tico de stock en ventas financiadas y cta. cte.',
+    label: 'Stock de Mercadería',
+    description: 'Catálogo de productos, control de inventario y descuento automático de stock en ventas financiadas y cta. cte.',
   },
 ];

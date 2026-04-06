@@ -7,6 +7,8 @@ import type {
   FinClienteMoraResumen,
   FinMoraAccion,
   FinMoraAccionClase,
+  FinMoraAccionPrioridad,
+  FinMoraAccionTipo,
   FinMoraEtapa,
 } from "@/types/fin-mora";
 import type { FinTipoCliente } from "@/types/fin-tipo-cliente";
@@ -36,29 +38,53 @@ function fullName(cliente: FinClienteMoraResumen) {
 
 function etapaLabel(etapa: FinMoraEtapa) {
   switch (etapa) {
+    case "mora_temprana":
+      return "Mora temprana";
     case "pre_judicial":
       return "Pre judicial";
     case "judicial":
       return "Judicial";
     default:
-      return "Sin gestión";
+      return "Sin gestion";
   }
 }
 
-function tipoLabel(tipo: string) {
-  const labels: Record<string, string> = {
+function tipoLabel(tipo: FinMoraAccionTipo) {
+  const labels: Record<FinMoraAccionTipo, string> = {
     llamado: "Llamado",
     whatsapp: "WhatsApp",
     email: "Email",
     carta_documento: "Carta documento",
     visita: "Visita",
     acuerdo: "Acuerdo",
-    derivacion_estudio: "Derivación estudio",
+    derivacion_estudio: "Derivacion a estudio",
     demanda: "Demanda",
     nota_interna: "Nota interna",
+    sms: "SMS",
+    tarea: "Tarea",
+    recordatorio: "Recordatorio",
+    audiencia: "Audiencia",
+    presentacion_judicial: "Presentacion judicial",
+    gestion_documental: "Gestion documental",
+    actualizacion_estado: "Actualizacion de estado",
   };
 
   return labels[tipo] ?? tipo;
+}
+
+function prioridadLabel(prioridad?: FinMoraAccionPrioridad) {
+  switch (prioridad) {
+    case "baja":
+      return "Baja";
+    case "media":
+      return "Media";
+    case "alta":
+      return "Alta";
+    case "urgente":
+      return "Urgente";
+    default:
+      return "Media";
+  }
 }
 
 const columns: Column<FinClienteMoraResumen>[] = [
@@ -74,12 +100,12 @@ const columns: Column<FinClienteMoraResumen>[] = [
   },
   {
     key: "tipo_cliente_nombre",
-    header: "Clasificación",
+    header: "Clasificacion",
     render: (row) => row.tipo_cliente_nombre || "Sin tipo",
   },
   {
     key: "creditos_en_mora_count",
-    header: "Créditos mora",
+    header: "Creditos mora",
     render: (row) =>
       `${row.creditos_en_mora_count + row.creditos_incobrables_count} caso(s)`,
   },
@@ -91,7 +117,7 @@ const columns: Column<FinClienteMoraResumen>[] = [
   },
   {
     key: "dias_max_mora",
-    header: "Días mora",
+    header: "Dias mora",
     className: "text-center",
     render: (row) => String(row.dias_max_mora),
   },
@@ -104,13 +130,55 @@ const columns: Column<FinClienteMoraResumen>[] = [
         className={
           row.mora_etapa === "judicial"
             ? "border-red-200 bg-red-50 text-red-700"
-            : "border-amber-200 bg-amber-50 text-amber-700"
+            : row.mora_etapa === "pre_judicial"
+              ? "border-amber-200 bg-amber-50 text-amber-700"
+              : "border-blue-200 bg-blue-50 text-blue-700"
         }
       >
         {etapaLabel(row.mora_etapa)}
       </Badge>
     ),
   },
+  {
+    key: "seguimiento",
+    header: "Seguimiento",
+    render: (row) => (
+      <div>
+        <p className="font-medium text-slate-900">
+          {row.proxima_accion_tipo ? tipoLabel(row.proxima_accion_tipo) : "Sin proxima accion"}
+        </p>
+        <p className="text-xs text-slate-500">
+          {row.proxima_accion_responsable || "Sin responsable"} ·{" "}
+          {prioridadLabel(row.proxima_accion_prioridad)}
+        </p>
+      </div>
+    ),
+  },
+];
+
+const ACTION_TYPE_OPTIONS: FinMoraAccionTipo[] = [
+  "llamado",
+  "whatsapp",
+  "email",
+  "carta_documento",
+  "visita",
+  "acuerdo",
+  "derivacion_estudio",
+  "demanda",
+  "nota_interna",
+  "tarea",
+  "recordatorio",
+];
+
+const NEXT_ACTION_OPTIONS: FinMoraAccionTipo[] = [
+  "llamado",
+  "whatsapp",
+  "email",
+  "acuerdo",
+  "tarea",
+  "recordatorio",
+  "derivacion_estudio",
+  "gestion_documental",
 ];
 
 type Props = {
@@ -132,15 +200,22 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
   const [etapa, setEtapa] = useState<FinMoraEtapa>(clase);
   const [motivo, setMotivo] = useState("");
   const [proximaAccion, setProximaAccion] = useState("");
-  const [accionTipo, setAccionTipo] = useState(
+  const [accionTipo, setAccionTipo] = useState<FinMoraAccionTipo>(
     clase === "judicial" ? "derivacion_estudio" : "llamado"
   );
+  const [prioridad, setPrioridad] = useState<FinMoraAccionPrioridad>(
+    clase === "judicial" ? "alta" : "media"
+  );
+  const [responsableNombre, setResponsableNombre] = useState("");
+  const [proximaAccionTipo, setProximaAccionTipo] =
+    useState<FinMoraAccionTipo>("recordatorio");
   const [resultado, setResultado] = useState("");
   const [notas, setNotas] = useState("");
 
   const fetchData = async (params?: { q?: string; tipoClienteId?: string }) => {
     setLoading(true);
     setError(null);
+
     const query = new URLSearchParams({ etapa: clase });
     if (params?.q) {
       query.set("q", params.q);
@@ -162,7 +237,8 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
         tiposRes.json(),
       ]);
 
-      const nextClientes = (clientesData as { clientes?: FinClienteMoraResumen[] }).clientes ?? [];
+      const nextClientes =
+        (clientesData as { clientes?: FinClienteMoraResumen[] }).clientes ?? [];
       setClientes(nextClientes);
       setAcciones((accionesData as { acciones?: FinMoraAccion[] }).acciones ?? []);
       setTipos((tiposData as { tipos?: FinTipoCliente[] }).tipos ?? []);
@@ -192,18 +268,28 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
       setEtapa(clase);
       setMotivo("");
       setProximaAccion("");
+      setPrioridad(clase === "judicial" ? "alta" : "media");
+      setResponsableNombre("");
+      setProximaAccionTipo("recordatorio");
       return;
     }
 
     setEtapa(selectedCliente.mora_etapa);
     setMotivo(selectedCliente.gestion_mora_motivo ?? "");
     setProximaAccion(selectedCliente.proxima_accion_at ?? "");
+    setPrioridad(
+      selectedCliente.proxima_accion_prioridad ??
+        (clase === "judicial" ? "alta" : "media")
+    );
+    setResponsableNombre(selectedCliente.proxima_accion_responsable ?? "");
   }, [selectedCliente, clase]);
 
   const accionesCliente = useMemo(
     () =>
       acciones.filter(
-        (accion) => accion.cliente_id === selectedId && accion.clase === clase
+        (accion) =>
+          accion.cliente_id === selectedId &&
+          (accion.etapa === clase || accion.clase === clase)
       ),
     [acciones, clase, selectedId]
   );
@@ -250,7 +336,7 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
 
   const submitAccion = async () => {
     if (!selectedCliente || !resultado.trim()) {
-      setError("Seleccioná un cliente y cargá el resultado de la gestión.");
+      setError("Selecciona un cliente y carga el resultado de la gestion.");
       return;
     }
 
@@ -264,22 +350,27 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
           cliente_id: selectedCliente.id,
           clase,
           tipo: accionTipo,
+          prioridad,
           resultado,
           notas: notas || undefined,
+          responsable_nombre: responsableNombre || undefined,
+          proxima_accion_tipo: proximaAccionTipo,
           proxima_accion_at: proximaAccion || undefined,
         }),
       });
 
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? "No se pudo registrar la acción");
+        throw new Error(body?.error ?? "No se pudo registrar la accion");
       }
 
       setResultado("");
       setNotas("");
+      setResponsableNombre("");
+      setProximaAccionTipo("recordatorio");
       await fetchData({ q, tipoClienteId });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo registrar la acción.");
+      setError(err instanceof Error ? err.message : "No se pudo registrar la accion.");
     } finally {
       setSaving(false);
     }
@@ -288,14 +379,14 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
   const practices =
     clase === "judicial"
       ? [
-          "Derivación formal a estudio con evidencia consolidada y fecha.",
-          "Registro del estado procesal y próxima acción obligatoria.",
+          "Derivacion formal a estudio con evidencia consolidada y fecha.",
+          "Registro del estado procesal y proxima accion obligatoria.",
           "Congelar excepciones comerciales mientras el caso siga judicializado.",
         ]
       : [
           "Primer contacto dentro de 24 horas del vencimiento.",
           "Promesa de pago siempre con fecha y canal registrado.",
-          "Escalar a intimación formal si no hay respuesta.",
+          "Escalar a intimacion formal si no hay respuesta.",
         ];
 
   return (
@@ -313,7 +404,7 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
       <div className="grid gap-4 md:grid-cols-3">
         {[
           {
-            label: "Clientes en gestión",
+            label: "Clientes en gestion",
             value: String(summary.clientes),
             detail: "Misma base de clientes, filtrada por etapa",
             icon: clase === "judicial" ? Scale : BellRing,
@@ -325,7 +416,7 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
             icon: FileWarning,
           },
           {
-            label: "Próximas acciones",
+            label: "Proximas acciones",
             value: String(summary.accionesPendientes),
             detail: "Casos con seguimiento agendado",
             icon: clase === "judicial" ? Gavel : PhoneCall,
@@ -353,7 +444,10 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
           onChange={(event) => setQ(event.target.value)}
           className="max-w-sm"
         />
-        <Select value={tipoClienteId || "todos"} onValueChange={(value) => setTipoClienteId(value === "todos" ? "" : value)}>
+        <Select
+          value={tipoClienteId || "todos"}
+          onValueChange={(value) => setTipoClienteId(value === "todos" ? "" : value)}
+        >
           <SelectTrigger className="w-56">
             <SelectValue />
           </SelectTrigger>
@@ -396,12 +490,12 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Ficha de gestión</CardTitle>
+              <CardTitle>Ficha de gestion</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {!selectedCliente ? (
                 <p className="text-sm text-slate-400">
-                  Seleccioná un cliente para gestionar la mora.
+                  Selecciona un cliente para gestionar la mora.
                 </p>
               ) : (
                 <>
@@ -411,7 +505,7 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
                     </p>
                     <p className="text-sm text-slate-500">
                       {selectedCliente.cuit} · {ars(selectedCliente.saldo_vencido)} ·{" "}
-                      {selectedCliente.dias_max_mora} día(s) de mora
+                      {selectedCliente.dias_max_mora} dia(s) de mora
                     </p>
                   </div>
 
@@ -428,7 +522,8 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="sin_gestion">Sin gestión</SelectItem>
+                          <SelectItem value="sin_gestion">Sin gestion</SelectItem>
+                          <SelectItem value="mora_temprana">Mora temprana</SelectItem>
                           <SelectItem value="pre_judicial">Pre judicial</SelectItem>
                           <SelectItem value="judicial">Judicial</SelectItem>
                         </SelectContent>
@@ -437,7 +532,7 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
 
                     <div>
                       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-                        Próxima acción
+                        Proxima accion
                       </p>
                       <Input
                         type="date"
@@ -468,35 +563,60 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Acción CRM</CardTitle>
+              <CardTitle>Accion CRM</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
                   Tipo
                 </p>
-                <Select value={accionTipo} onValueChange={setAccionTipo}>
+                <Select value={accionTipo} onValueChange={(value) => setAccionTipo(value as FinMoraAccionTipo)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[
-                      "llamado",
-                      "whatsapp",
-                      "email",
-                      "carta_documento",
-                      "visita",
-                      "acuerdo",
-                      "derivacion_estudio",
-                      "demanda",
-                      "nota_interna",
-                    ].map((tipo) => (
+                    {ACTION_TYPE_OPTIONS.map((tipo) => (
                       <SelectItem key={tipo} value={tipo}>
                         {tipoLabel(tipo)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Prioridad
+                  </p>
+                  <Select
+                    value={prioridad}
+                    onValueChange={(value) =>
+                      setPrioridad(value as FinMoraAccionPrioridad)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="baja">Baja</SelectItem>
+                      <SelectItem value="media">Media</SelectItem>
+                      <SelectItem value="alta">Alta</SelectItem>
+                      <SelectItem value="urgente">Urgente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Responsable
+                  </p>
+                  <Input
+                    value={responsableNombre}
+                    onChange={(event) => setResponsableNombre(event.target.value)}
+                    placeholder="Ej. Cobranzas, Estudio externo"
+                  />
+                </div>
               </div>
 
               <div>
@@ -517,12 +637,48 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
                 <Textarea
                   value={notas}
                   onChange={(event) => setNotas(event.target.value)}
-                  placeholder="Detalle de la gestión realizada"
+                  placeholder="Detalle de la gestion realizada"
                 />
               </div>
 
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Proxima accion
+                  </p>
+                  <Select
+                    value={proximaAccionTipo}
+                    onValueChange={(value) =>
+                      setProximaAccionTipo(value as FinMoraAccionTipo)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {NEXT_ACTION_OPTIONS.map((tipo) => (
+                        <SelectItem key={tipo} value={tipo}>
+                          {tipoLabel(tipo)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Fecha seguimiento
+                  </p>
+                  <Input
+                    type="date"
+                    value={proximaAccion ? proximaAccion.slice(0, 10) : ""}
+                    onChange={(event) => setProximaAccion(event.target.value)}
+                  />
+                </div>
+              </div>
+
               <Button onClick={() => void submitAccion()} disabled={saving || !selectedCliente}>
-                Registrar acción
+                Registrar accion
               </Button>
             </CardContent>
           </Card>
@@ -553,14 +709,23 @@ export function MoraCRMBoard({ clase, title, description }: Props) {
                           {accion.created_at.slice(0, 10)} · {accion.created_by.nombre}
                         </p>
                       </div>
-                      <Badge variant="outline">{etapaLabel(accion.clase)}</Badge>
+                      <Badge variant="outline">
+                        {etapaLabel(accion.etapa ?? accion.clase ?? "sin_gestion")}
+                      </Badge>
                     </div>
+                    <p className="mt-2 text-xs text-slate-500">
+                      {accion.responsable_nombre || "Sin responsable"} ·{" "}
+                      {prioridadLabel(accion.prioridad)}
+                      {accion.proxima_accion_tipo
+                        ? ` · Sigue con ${tipoLabel(accion.proxima_accion_tipo)}`
+                        : ""}
+                    </p>
                     {accion.notas && (
                       <p className="mt-2 text-sm text-slate-600">{accion.notas}</p>
                     )}
                     {accion.proxima_accion_at && (
                       <p className="mt-2 text-xs text-amber-700">
-                        Próxima acción: {accion.proxima_accion_at.slice(0, 10)}
+                        Proxima accion: {accion.proxima_accion_at.slice(0, 10)}
                       </p>
                     )}
                   </div>

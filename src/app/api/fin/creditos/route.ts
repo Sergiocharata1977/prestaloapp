@@ -1,5 +1,7 @@
 import { withAuth } from '@/lib/api/withAuth';
+import { ClienteRiesgoService } from '@/services/ClienteRiesgoService';
 import { CreditoService } from '@/services/CreditoService';
+import { StockService } from '@/services/StockService';
 import { getAdminFirestore } from '@/firebase/admin';
 import { FIN_COLLECTIONS } from '@/firebase/collections';
 import type {
@@ -20,6 +22,7 @@ const creditoEstadoSchema = z.enum([
 ]);
 
 const creditoCreateSchema = z.object({
+  validar_solo: z.boolean().optional().default(false),
   sucursal_id: z.string().trim().optional().default(''),
   cliente_id: z.string().trim().min(1, 'cliente_id requerido'),
   tipo_cliente_id: z.string().trim().min(1).optional(),
@@ -40,6 +43,7 @@ const creditoCreateSchema = z.object({
   sistema: z.enum(['frances', 'aleman']),
   fecha_otorgamiento: z.iso.date('fecha_otorgamiento invalida'),
   fecha_primer_vencimiento: z.iso.date('fecha_primer_vencimiento invalida'),
+  stock_producto_id: z.string().trim().min(1).optional(),
 });
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -101,6 +105,19 @@ function parseTipoOperacion(
   return value as FinCreditoTipoOperacion | undefined;
 }
 
+function resolveRiesgoMessage(
+  riesgoOperativo: NonNullable<
+    Awaited<ReturnType<typeof ClienteRiesgoService.evaluarOriginacionCredito>>
+  >
+): string {
+  return (
+    riesgoOperativo.items[0]?.detalle ??
+    (riesgoOperativo.estado === 'revision_manual'
+      ? 'El credito requiere revision manual antes del otorgamiento'
+      : 'El credito no cumple las validaciones operativas de riesgo')
+  );
+}
+
 export const GET = withAuth(async (request: NextRequest, _context, auth) => {
   try {
     if (!auth.organizationId) {
@@ -144,6 +161,7 @@ export const POST = withAuth(async (request: NextRequest, _context, auth) => {
     }
 
     const body = creditoCreateSchema.parse(json);
+    const { stock_producto_id, validar_solo, ...creditoBody } = body;
 
     // Resolver sucursal: si viene vacía, usar la primera activa de la org
     let sucursalId = body.sucursal_id ?? '';
@@ -164,12 +182,37 @@ export const POST = withAuth(async (request: NextRequest, _context, auth) => {
     }
 
     const payload: FinCreditoCreateInput = {
-      ...body,
+      ...creditoBody,
       sucursal_id: sucursalId,
       sistema: parseSistema(body.sistema),
       tipo_operacion: parseTipoOperacion(body.tipo_operacion),
       valor_contado_bien: body.valor_contado_bien,
     };
+
+    const riesgoOperativo = await ClienteRiesgoService.evaluarOriginacionCredito(
+      auth.organizationId,
+      payload
+    );
+
+    if (validar_solo) {
+      return NextResponse.json({
+        ok: riesgoOperativo?.permite_otorgar ?? true,
+        riesgo_operativo: riesgoOperativo,
+      });
+    }
+
+    if (
+      riesgoOperativo &&
+      (!riesgoOperativo.permite_otorgar || riesgoOperativo.requiere_revision_manual)
+    ) {
+      return NextResponse.json(
+        {
+          error: resolveRiesgoMessage(riesgoOperativo),
+          riesgo_operativo: riesgoOperativo,
+        },
+        { status: 409 }
+      );
+    }
 
     const result = await CreditoService.crear(
       auth.organizationId,
@@ -177,6 +220,38 @@ export const POST = withAuth(async (request: NextRequest, _context, auth) => {
       auth.user.uid,
       auth.user.name ?? auth.user.email ?? auth.user.uid
     );
+
+    if (
+      stock_producto_id &&
+      body.tipo_operacion === 'compra_financiada'
+    ) {
+      try {
+        const [producto, credito] = await Promise.all([
+          StockService.getProducto(auth.organizationId, stock_producto_id),
+          CreditoService.getById(auth.organizationId, result.creditoId),
+        ]);
+
+        if (producto) {
+          await StockService.registrarMovimiento(
+            auth.organizationId,
+            {
+              producto_id: stock_producto_id,
+              producto_nombre: producto.nombre,
+              tipo: 'egreso_venta_financiada',
+              cantidad: 1,
+              referencia_id: result.creditoId,
+              referencia_tipo: 'credito',
+              referencia_numero: credito?.numero_credito,
+              precio_unitario:
+                body.valor_contado_bien ?? producto.precio_venta_contado,
+            },
+            auth.user.uid
+          );
+        }
+      } catch (stockErr) {
+        console.error('[stock] Error al descontar stock:', stockErr);
+      }
+    }
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

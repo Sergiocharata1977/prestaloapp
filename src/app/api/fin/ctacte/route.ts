@@ -1,6 +1,7 @@
 import { getAdminFirestore } from '@/firebase/admin';
 import { withAuth } from '@/lib/api/withAuth';
 import { CtaCteService } from '@/services/CtaCteService';
+import { StockService } from '@/services/StockService';
 import type { FinCtaCteEstado } from '@/types/fin-ctacte';
 import { NextRequest, NextResponse } from 'next/server';
 import { z, ZodError } from 'zod';
@@ -49,6 +50,16 @@ const nuevaOperacionSchema = z.object({
     mora_valor: z.number().finite().min(0, 'mora_valor no puede ser negativo'),
     permite_refinanciacion: z.boolean(),
   }),
+  mercaderia_items: z
+    .array(
+      z.object({
+        productoId: z.string().trim().min(1, 'productoId requerido'),
+        nombre: z.string().trim().optional(),
+        cantidad: z.number().int('cantidad debe ser entera').positive('cantidad debe ser mayor a cero'),
+        precioUnitario: z.number().finite().min(0, 'precioUnitario no puede ser negativo'),
+      })
+    )
+    .optional(),
 });
 
 // ─── Error helpers ────────────────────────────────────────────────────────────
@@ -147,6 +158,33 @@ export const POST = withAuth(async (request: NextRequest, _context, auth) => {
       auth.user.uid,
       auth.user.name ?? auth.user.email ?? auth.user.uid
     );
+    const operacionNumero = body.comprobante;
+
+    if (Array.isArray(body.mercaderia_items) && body.mercaderia_items.length > 0) {
+      for (const item of body.mercaderia_items) {
+        try {
+          const producto = await StockService.getProducto(auth.organizationId, item.productoId);
+          if (producto) {
+            await StockService.registrarMovimiento(
+              auth.organizationId,
+              {
+                producto_id: item.productoId,
+                producto_nombre: producto.nombre,
+                tipo: 'egreso_venta_ctacte',
+                cantidad: item.cantidad,
+                referencia_id: id,
+                referencia_tipo: 'ctacte',
+                referencia_numero: operacionNumero,
+                precio_unitario: item.precioUnitario,
+              },
+              auth.user.uid
+            );
+          }
+        } catch (err) {
+          console.error('[stock] Error al descontar item:', item.productoId, err);
+        }
+      }
+    }
 
     return NextResponse.json({ id }, { status: 201 });
   } catch (error) {

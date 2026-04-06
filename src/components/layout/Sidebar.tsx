@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Archive,
   BarChart2,
   BookOpen,
   BookOpenText,
@@ -19,10 +20,12 @@ import {
   LayoutDashboard,
   MonitorSmartphone,
   Package,
+  PackageOpen,
   Scale,
   Settings,
   ShoppingBag,
   Siren,
+  TrendingUp,
   UserCircle2,
   Users,
   Wallet,
@@ -48,9 +51,17 @@ const operacionesItems = [
   { href: "/ventas-financiadas",  label: "Venta Financiada", icon: ShoppingBag,   capability: "productos" },
 ];
 
+const stockItems = [
+  { href: "/stock",                label: "Stock Dashboard", icon: Archive,     capability: "stock_mercaderia" },
+  { href: "/stock/productos",      label: "Productos",       icon: PackageOpen, capability: "stock_mercaderia" },
+  { href: "/stock/ingresos/nueva", label: "Nuevo ingreso",   icon: TrendingUp,  capability: "stock_mercaderia" },
+  { href: "/stock/movimientos",    label: "Movimientos",     icon: FileText,    capability: "stock_mercaderia" },
+];
+
 const accionesItems = [
   { href: "/acciones/mora-temprana", label: "Pre judicial", icon: Siren },
   { href: "/acciones/judiciales", label: "Judicial", icon: Gavel },
+  { href: "/acciones/agenda", label: "Agenda operativa", icon: CalendarDays },
 ];
 
 const configItems = [
@@ -222,10 +233,22 @@ export function Sidebar() {
           />
         </div>
 
-        {/* Reportes — desplegable */}
         <div className="mt-4 border-t border-white/[0.07] pt-4">
           <p className="mb-1 px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">
-            Analítica
+            Inventario
+          </p>
+          <CollapsibleSection
+            label="Inventario"
+            icon={Archive}
+            items={stockItems}
+            pathname={pathname}
+          />
+        </div>
+
+        {/* Reportes — desplegable */}
+                <div className="mt-4 border-t border-white/[0.07] pt-4">
+          <p className="mb-1 px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">
+            Analitica
           </p>
           <CollapsibleSection
             label="Reportes"
@@ -283,3 +306,5 @@ export function Sidebar() {
     </aside>
   );
 }
+
+

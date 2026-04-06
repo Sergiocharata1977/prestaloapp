@@ -1,11 +1,12 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, CreditCard, Printer, ShoppingBag } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CreditCard, Printer, ShieldAlert, ShoppingBag } from "lucide-react";
 import type { FinCliente } from "@/types/fin-cliente";
 import type { FinPlanFinanciacion } from "@/types/fin-plan-financiacion";
 import type { FinPoliticaCrediticia } from "@/types/fin-politica-crediticia";
+import type { FinStockProducto } from "@/types/fin-stock";
 import type { FinSucursal } from "@/types/fin-sucursal";
 import type { TablaAmortizacion } from "@/services/AmortizationService";
 import { resolverTasa } from "@/lib/fin/planUtils";
@@ -55,6 +56,24 @@ interface Props {
   onSuccess?: () => void;
 }
 
+interface RiesgoOperativoItem {
+  codigo: string;
+  nivel: "warning" | "critical";
+  accion: "advertencia" | "revision_manual" | "bloqueo";
+  titulo: string;
+  detalle: string;
+}
+
+interface RiesgoOperativo {
+  estado: "aprobado" | "advertencia" | "revision_manual" | "bloqueado";
+  permite_otorgar: boolean;
+  requiere_revision_manual: boolean;
+  semaforo: "verde" | "amarillo" | "rojo";
+  score: number | null;
+  linea_disponible: number | null;
+  items: RiesgoOperativoItem[];
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -66,7 +85,7 @@ const fmt = new Intl.NumberFormat("es-AR", {
 });
 
 function ars(v?: number | null) {
-  if (typeof v !== "number" || isNaN(v)) return "—";
+  if (typeof v !== "number" || isNaN(v)) return "â€”";
   return fmt.format(v);
 }
 
@@ -116,6 +135,7 @@ function ClienteSearch({
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (value) setSearch(buildLabel(value));
   }, [value]);
 
@@ -176,13 +196,13 @@ function ResumenCuotas({
   return (
     <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-slate-50 p-4">
       <h3 className="mb-3 text-center text-sm font-semibold text-slate-600">
-        Resumen de Operación
+        Resumen de OperaciÃ³n
       </h3>
       {loading ? (
         <p className="mt-8 text-center text-xs text-slate-400">Calculando...</p>
       ) : !tabla ? (
         <p className="mt-8 text-center text-xs text-slate-400">
-          Completá monto y cuotas para ver el detalle
+          CompletÃ¡ monto y cuotas para ver el detalle
         </p>
       ) : (
         <div className="space-y-1 overflow-y-auto">
@@ -192,7 +212,7 @@ function ResumenCuotas({
               className="flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-white"
             >
               <span className="text-slate-500">
-                Cuota {c.numero_cuota} · {c.fecha_vencimiento.slice(0, 10)}
+                Cuota {c.numero_cuota} Â· {c.fecha_vencimiento.slice(0, 10)}
               </span>
               <span className="font-semibold tabular-nums text-slate-800">
                 {ars(c.total)}
@@ -227,6 +247,7 @@ export function NuevoCreditoDialog({
   const { capabilities } = useAuth();
   const hasSucursalesMulti = capabilities.includes(CAPABILITIES.SUCURSALES_MULTI);
   const hasProductos = capabilities.includes(CAPABILITIES.PRODUCTOS);
+  const hasStockMercaderia = capabilities.includes(CAPABILITIES.STOCK_MERCADERIA);
 
   const [tipo, setTipo] = useState<TipoFormulario | null>(null);
   const [form, setForm] = useState<FormState>({ ...EMPTY });
@@ -238,13 +259,45 @@ export function NuevoCreditoDialog({
   const [sucursales, setSucursales] = useState<FinSucursal[]>([]);
   const [planes, setPlanes] = useState<FinPlanFinanciacion[]>([]);
   const [politicas, setPoliticas] = useState<FinPoliticaCrediticia[]>([]);
+  const [productosStock, setProductosStock] = useState<FinStockProducto[]>([]);
+  const [stockProductoId, setStockProductoId] = useState<string>("");
   const [clienteSeleccionado, setClienteSeleccionado] = useState<FinCliente | null>(null);
   const [tabla, setTabla] = useState<TablaAmortizacion | null>(null);
   const [tablaLoading, setTablaLoading] = useState(false);
+  const [riesgoOperativo, setRiesgoOperativo] = useState<RiesgoOperativo | null>(null);
+  const [riesgoLoading, setRiesgoLoading] = useState(false);
 
   const previewRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const riesgoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setField = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((prev) => ({ ...prev, [k]: v }));
+
+  const buildPayload = (validarSolo: boolean) => {
+    const capital = parseFloat(form.capital);
+    const cuotas = parseInt(form.cantidad_cuotas);
+
+    return {
+      validar_solo: validarSolo,
+      sucursal_id: form.sucursal_id,
+      cliente_id: form.cliente_id,
+      politica_crediticia_id: form.politica_id || undefined,
+      plan_financiacion_id: form.plan_financiacion_id || undefined,
+      tipo_operacion: tipo === "compra_financiada" ? ("compra_financiada" as const) : undefined,
+      articulo_descripcion:
+        tipo === "prestamo"
+          ? "PrÃ©stamo personal"
+          : form.articulo_descripcion.trim() || "ValidaciÃ³n de compra financiada",
+      valor_contado_bien:
+        tipo === "compra_financiada" && valorContado ? parseFloat(valorContado) : undefined,
+      capital,
+      tasa_mensual: form.tasa_mensual,
+      cantidad_cuotas: cuotas,
+      sistema: "frances" as const,
+      fecha_otorgamiento: form.fecha_otorgamiento,
+      fecha_primer_vencimiento: form.fecha_primer_vencimiento,
+      stock_producto_id: stockProductoId || undefined,
+    };
+  };
 
   // Load catalogs
   useEffect(() => {
@@ -268,6 +321,21 @@ export function NuevoCreditoDialog({
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, tipo]);
+
+  useEffect(() => {
+    if (!open || tipo !== "compra_financiada" || !hasStockMercaderia) {
+      setProductosStock([]);
+      setStockProductoId("");
+      return;
+    }
+
+    apiFetch("/api/fin/stock/productos?soloConStock=true")
+      .then((r) => r.json())
+      .then((data) => {
+        setProductosStock((data as { productos?: FinStockProducto[] }).productos ?? []);
+      })
+      .catch(() => setProductosStock([]));
+  }, [hasStockMercaderia, open, tipo]);
 
   // Preselected client
   useEffect(() => {
@@ -298,7 +366,7 @@ export function NuevoCreditoDialog({
     });
   };
 
-  // Auto política cuando cargan los catálogos
+  // Auto polÃ­tica cuando cargan los catÃ¡logos
   useEffect(() => {
     if (!clienteSeleccionado || politicas.length === 0) return;
     const match = politicas.filter((p) => p.tipo_cliente_id === clienteSeleccionado.tipo_cliente_id);
@@ -311,7 +379,7 @@ export function NuevoCreditoDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteSeleccionado, politicas, planes]);
 
-  // Auto plan cuando cambia política
+  // Auto plan cuando cambia polÃ­tica
   useEffect(() => {
     if (!form.politica_id || planes.length === 0) return;
     const match = planes.filter((p) => p.politica_id === form.politica_id);
@@ -326,7 +394,6 @@ export function NuevoCreditoDialog({
     const cuotas = parseInt(form.cantidad_cuotas);
     if (!plan || !cuotas) return;
     setField("tasa_mensual", resolverTasa(plan, cuotas));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.plan_financiacion_id, form.cantidad_cuotas, planes]);
 
   // Live preview
@@ -360,8 +427,70 @@ export function NuevoCreditoDialog({
         .catch(() => setTabla(null))
         .finally(() => setTablaLoading(false));
     }, 500);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.capital, form.cantidad_cuotas, form.tasa_mensual, form.fecha_primer_vencimiento, form.plan_financiacion_id]);
+
+  useEffect(() => {
+    const capital = parseFloat(form.capital);
+    const cuotas = parseInt(form.cantidad_cuotas);
+
+    if (!open || !tipo || !form.cliente_id || !capital || capital <= 0 || !cuotas || cuotas <= 0) {
+      setRiesgoOperativo(null);
+      setRiesgoLoading(false);
+      return;
+    }
+
+    if (riesgoRef.current) clearTimeout(riesgoRef.current);
+    riesgoRef.current = setTimeout(() => {
+      setRiesgoLoading(true);
+      const payload = {
+        validar_solo: true,
+        sucursal_id: form.sucursal_id,
+        cliente_id: form.cliente_id,
+        politica_crediticia_id: form.politica_id || undefined,
+        plan_financiacion_id: form.plan_financiacion_id || undefined,
+        tipo_operacion: tipo === "compra_financiada" ? ("compra_financiada" as const) : undefined,
+        articulo_descripcion:
+          tipo === "prestamo"
+            ? "Préstamo personal"
+            : form.articulo_descripcion.trim() || "Validación de compra financiada",
+        valor_contado_bien:
+          tipo === "compra_financiada" && valorContado ? parseFloat(valorContado) : undefined,
+        capital,
+        tasa_mensual: form.tasa_mensual,
+        cantidad_cuotas: cuotas,
+        sistema: "frances" as const,
+        fecha_otorgamiento: form.fecha_otorgamiento,
+        fecha_primer_vencimiento: form.fecha_primer_vencimiento,
+        stock_producto_id: stockProductoId || undefined,
+      };
+      apiFetch("/api/fin/creditos", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          const decision = (data as { riesgo_operativo?: RiesgoOperativo | null }).riesgo_operativo ?? null;
+          setRiesgoOperativo(decision);
+        })
+        .catch(() => setRiesgoOperativo(null))
+        .finally(() => setRiesgoLoading(false));
+    }, 350);
+  }, [
+    open,
+    tipo,
+    form.cliente_id,
+    form.sucursal_id,
+    form.politica_id,
+    form.plan_financiacion_id,
+    form.capital,
+    form.cantidad_cuotas,
+    form.tasa_mensual,
+    form.fecha_otorgamiento,
+    form.fecha_primer_vencimiento,
+    form.articulo_descripcion,
+    valorContado,
+    stockProductoId,
+  ]);
 
   const handleConfirm = async () => {
     setServerError(null);
@@ -372,30 +501,21 @@ export function NuevoCreditoDialog({
     if (!cuotas || cuotas <= 0) return setServerError("Ingresá la cantidad de cuotas.");
     if (tipo === "compra_financiada" && !form.articulo_descripcion.trim())
       return setServerError("Ingresá la descripción del bien.");
+    if (riesgoOperativo?.estado === "bloqueado")
+      return setServerError("El crédito está bloqueado por validaciones operativas de riesgo.");
+    if (riesgoOperativo?.estado === "revision_manual")
+      return setServerError("El crédito requiere revisión manual antes del otorgamiento.");
 
     setSubmitting(true);
     try {
-      const payload = {
-        sucursal_id: form.sucursal_id,
-        cliente_id: form.cliente_id,
-        plan_financiacion_id: form.plan_financiacion_id || undefined,
-        tipo_operacion: tipo === "compra_financiada" ? ("compra_financiada" as const) : undefined,
-        articulo_descripcion: tipo === "prestamo" ? "Préstamo personal" : form.articulo_descripcion,
-        valor_contado_bien:
-          tipo === "compra_financiada" && valorContado ? parseFloat(valorContado) : undefined,
-        capital,
-        tasa_mensual: form.tasa_mensual,
-        cantidad_cuotas: cuotas,
-        sistema: "frances" as const,
-        fecha_otorgamiento: form.fecha_otorgamiento,
-        fecha_primer_vencimiento: form.fecha_primer_vencimiento,
-      };
       const res = await apiFetch("/api/fin/creditos", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(buildPayload(false)),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        const riesgo = (body as { riesgo_operativo?: RiesgoOperativo | null }).riesgo_operativo ?? null;
+        if (riesgo) setRiesgoOperativo(riesgo);
         throw new Error((body as { error?: string }).error ?? "Error al crear crédito");
       }
       const data = (await res.json()) as { creditoId: string };
@@ -407,7 +527,6 @@ export function NuevoCreditoDialog({
       setSubmitting(false);
     }
   };
-
   const handleClose = () => {
     setForm({ ...EMPTY });
     setTipo(null);
@@ -415,14 +534,20 @@ export function NuevoCreditoDialog({
     setCreditoCreado(null);
     setServerError(null);
     setTabla(null);
+    setProductosStock([]);
+    setStockProductoId("");
     setClienteSeleccionado(null);
+    setRiesgoOperativo(null);
+    setRiesgoLoading(false);
     onOpenChange(false);
   };
 
   const politicaSeleccionada = politicas.find((p) => p.id === form.politica_id);
   const planSeleccionado = planes.find((p) => p.id === form.plan_financiacion_id);
+  const riesgoBloquea =
+    riesgoOperativo?.estado === "bloqueado" || riesgoOperativo?.estado === "revision_manual";
 
-  // ─── Success screen ───────────────────────────────────────────────────────
+  // â”€â”€â”€ Success screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (creditoCreado) {
     return (
       <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
@@ -432,16 +557,16 @@ export function NuevoCreditoDialog({
               <CheckCircle2 className="h-8 w-8 text-green-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold">Crédito otorgado</h3>
-              <p className="mt-1 text-sm text-slate-500">La operación fue registrada correctamente.</p>
+              <h3 className="text-lg font-semibold">CrÃ©dito otorgado</h3>
+              <p className="mt-1 text-sm text-slate-500">La operaciÃ³n fue registrada correctamente.</p>
             </div>
             <div className="flex flex-wrap justify-center gap-3">
               <Button onClick={() => window.open(`/print/credito/${creditoCreado.id}`, "_blank")}>
                 <Printer className="mr-2 h-4 w-4" />
-                Imprimir Pagaré
+                Imprimir PagarÃ©
               </Button>
               <Button variant="outline" onClick={() => { handleClose(); router.push(`/creditos/${creditoCreado.id}`); }}>
-                Ver crédito
+                Ver crÃ©dito
               </Button>
               <Button variant="ghost" onClick={handleClose}>Cerrar</Button>
             </div>
@@ -451,15 +576,15 @@ export function NuevoCreditoDialog({
     );
   }
 
-  // ─── Selector de tipo ─────────────────────────────────────────────────────
+  // â”€â”€â”€ Selector de tipo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (!tipo) {
     return (
       <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Nueva operación</DialogTitle>
+            <DialogTitle>Nueva operaciÃ³n</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-slate-500">¿Qué tipo de operación querés registrar?</p>
+          <p className="text-sm text-slate-500">Â¿QuÃ© tipo de operaciÃ³n querÃ©s registrar?</p>
           <div className="grid gap-3 pt-2">
             <button
               type="button"
@@ -470,8 +595,8 @@ export function NuevoCreditoDialog({
                 <CreditCard className="h-6 w-6" />
               </div>
               <div>
-                <p className="font-semibold text-slate-900">Préstamo</p>
-                <p className="text-sm text-slate-500">Otorgá dinero en efectivo con tabla de cuotas</p>
+                <p className="font-semibold text-slate-900">PrÃ©stamo</p>
+                <p className="text-sm text-slate-500">OtorgÃ¡ dinero en efectivo con tabla de cuotas</p>
               </div>
             </button>
 
@@ -486,7 +611,7 @@ export function NuevoCreditoDialog({
                 </div>
                 <div>
                   <p className="font-semibold text-slate-900">Compra Financiada</p>
-                  <p className="text-sm text-slate-500">Financiá un bien o producto con valor de contado</p>
+                  <p className="text-sm text-slate-500">FinanciÃ¡ un bien o producto con valor de contado</p>
                 </div>
               </button>
             )}
@@ -496,7 +621,7 @@ export function NuevoCreditoDialog({
     );
   }
 
-  // ─── Formulario ───────────────────────────────────────────────────────────
+  // â”€â”€â”€ Formulario â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const isPrestamo = tipo === "prestamo";
 
   return (
@@ -508,13 +633,20 @@ export function NuevoCreditoDialog({
               {isPrestamo ? <CreditCard className="h-5 w-5" /> : <ShoppingBag className="h-5 w-5" />}
             </div>
             <div>
-              <DialogTitle>{isPrestamo ? "Nuevo Préstamo" : "Nueva Compra Financiada"}</DialogTitle>
+              <DialogTitle>{isPrestamo ? "Nuevo PrÃ©stamo" : "Nueva Compra Financiada"}</DialogTitle>
               <button
                 type="button"
                 className="text-xs text-slate-400 hover:text-slate-600"
-                onClick={() => { setTipo(null); setForm({ ...EMPTY }); setTabla(null); setClienteSeleccionado(null); }}
+                onClick={() => {
+                  setTipo(null);
+                  setForm({ ...EMPTY });
+                  setTabla(null);
+                  setClienteSeleccionado(null);
+                  setProductosStock([]);
+                  setStockProductoId("");
+                }}
               >
-                ← Cambiar tipo
+                â† Cambiar tipo
               </button>
             </div>
           </div>
@@ -544,18 +676,18 @@ export function NuevoCreditoDialog({
               {clienteSeleccionado && politicaSeleccionada && (
                 <p className="text-xs text-indigo-600">
                   {politicaSeleccionada.nombre}
-                  {planSeleccionado ? ` · ${planSeleccionado.nombre}` : ""}
-                  {form.tasa_mensual ? ` · ${form.tasa_mensual}% mens.` : ""}
+                  {planSeleccionado ? ` Â· ${planSeleccionado.nombre}` : ""}
+                  {form.tasa_mensual ? ` Â· ${form.tasa_mensual}% mens.` : ""}
                 </p>
               )}
             </div>
 
-            {/* Compra Financiada — campos del bien */}
+            {/* Compra Financiada â€” campos del bien */}
             {!isPrestamo && (
               <div className="space-y-3 rounded-xl bg-violet-50 p-3">
                 <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">Bien financiado</p>
                 <div className="space-y-1">
-                  <Label className="text-xs text-slate-500">Descripción del bien</Label>
+                  <Label className="text-xs text-slate-500">DescripciÃ³n del bien</Label>
                   <Input
                     className="h-9 bg-white"
                     placeholder="Ej: Heladera Samsung 300L"
@@ -573,13 +705,42 @@ export function NuevoCreditoDialog({
                     onChange={(e) => setValorContado(e.target.value)}
                   />
                 </div>
+                {hasStockMercaderia && (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-500">Producto del catÃ¡logo de stock</Label>
+                    <input type="hidden" value={stockProductoId} readOnly />
+                    <Select
+                      value={stockProductoId || "__none__"}
+                      onValueChange={(value) => {
+                        const productoId = value === "__none__" ? "" : value;
+                        setStockProductoId(productoId);
+                        const producto = productosStock.find((item) => item.id === productoId);
+                        if (producto) {
+                          setField("articulo_descripcion", producto.nombre);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue placeholder="Seleccionar producto (opcional)..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sin producto asociado</SelectItem>
+                        {productosStock.map((producto) => (
+                          <SelectItem key={producto.id} value={producto.id}>
+                            {`${producto.codigo} - ${producto.nombre} [stock: ${producto.stock_actual} unidades]`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             )}
 
             {/* Monto */}
             <div className="space-y-1">
               <Label className="text-xs text-slate-500">
-                {isPrestamo ? "Monto del préstamo" : "Monto a financiar"}
+                {isPrestamo ? "Monto del prÃ©stamo" : "Monto a financiar"}
               </Label>
               <Input
                 className="h-9"
@@ -631,19 +792,83 @@ export function NuevoCreditoDialog({
               </p>
             )}
 
+            {(riesgoLoading || riesgoOperativo) && (
+              <div
+                className={`rounded-xl border px-3 py-3 text-xs ${
+                  riesgoOperativo?.estado === "bloqueado" || riesgoOperativo?.estado === "revision_manual"
+                    ? "border-amber-300 bg-amber-50 text-amber-900"
+                    : riesgoOperativo?.estado === "advertencia"
+                      ? "border-yellow-200 bg-yellow-50 text-yellow-900"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-900"
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  {riesgoOperativo?.estado === "bloqueado" || riesgoOperativo?.estado === "revision_manual" ? (
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  )}
+                  <div className="space-y-1">
+                    <p className="font-semibold">
+                      {riesgoLoading
+                        ? "Validando riesgo operativo..."
+                        : riesgoOperativo?.estado === "bloqueado"
+                          ? "Otorgamiento bloqueado"
+                          : riesgoOperativo?.estado === "revision_manual"
+                            ? "Requiere revisión manual"
+                            : riesgoOperativo?.estado === "advertencia"
+                              ? "Advertencias de riesgo"
+                              : "Riesgo aceptable"}
+                    </p>
+                    {!riesgoLoading && riesgoOperativo && (
+                      <>
+                        <p>
+                          Semáforo {riesgoOperativo.semaforo}
+                          {typeof riesgoOperativo.linea_disponible === "number"
+                            ? ` · Línea disponible ${ars(riesgoOperativo.linea_disponible)}`
+                            : ""}
+                        </p>
+                        {riesgoOperativo.items.length > 0 ? (
+                          <div className="space-y-1">
+                            {riesgoOperativo.items.map((item) => (
+                              <p key={item.codigo}>
+                                <span className="font-medium">{item.titulo}:</span> {item.detalle}
+                              </p>
+                            ))}
+                          </div>
+                        ) : (
+                          <p>No se detectaron bloqueos ni alertas operativas para este otorgamiento.</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <Button
               className={`w-full ${isPrestamo ? "bg-indigo-600 hover:bg-indigo-700" : "bg-violet-600 hover:bg-violet-700"}`}
               onClick={handleConfirm}
-              disabled={submitting}
+              disabled={submitting || riesgoLoading || riesgoBloquea}
             >
-              {submitting ? "Procesando..." : isPrestamo ? "Confirmar Préstamo" : "Confirmar Compra Financiada"}
+              {submitting
+                ? "Procesando..."
+                : riesgoOperativo?.estado === "bloqueado"
+                  ? "Crédito bloqueado"
+                  : riesgoOperativo?.estado === "revision_manual"
+                    ? "Requiere revisión manual"
+                    : isPrestamo
+                      ? "Confirmar Préstamo"
+                      : "Confirmar Compra Financiada"}
             </Button>
           </div>
 
-          {/* RIGHT — preview cuotas */}
+          {/* RIGHT â€” preview cuotas */}
           <ResumenCuotas tabla={tabla} loading={tablaLoading} />
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+
+

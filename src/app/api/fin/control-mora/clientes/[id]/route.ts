@@ -11,7 +11,7 @@ type RouteContext = {
 };
 
 const patchSchema = z.object({
-  etapa: z.enum(["sin_gestion", "pre_judicial", "judicial"]),
+  etapa: z.enum(["sin_gestion", "mora_temprana", "pre_judicial", "judicial"]),
   motivo: z.string().trim().optional(),
   proxima_accion_at: z.string().trim().optional(),
 });

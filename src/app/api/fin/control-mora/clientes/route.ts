@@ -3,7 +3,7 @@ import { MoraService } from "@/services/MoraService";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-const etapaSchema = z.enum(["pre_judicial", "judicial"]);
+const etapaSchema = z.enum(["mora_temprana", "pre_judicial", "judicial"]);
 
 export const GET = withAuth(async (request: NextRequest, _context, auth) => {
   try {

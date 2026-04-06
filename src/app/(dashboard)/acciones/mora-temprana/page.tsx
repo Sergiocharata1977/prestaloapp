@@ -3,9 +3,9 @@ import { MoraCRMBoard } from "@/components/fin/mora/MoraCRMBoard";
 export default function MoraTempranaPage() {
   return (
     <MoraCRMBoard
-      clase="pre_judicial"
-      title="Pre judicial"
-      description="Bandeja construida sobre la misma cartera de clientes de operaciones, filtrada por mora y enfocada en gestión preventiva antes del pase judicial."
+      clase="mora_temprana"
+      title="Mora temprana"
+      description="Bandeja de gestión preventiva para clientes con mora incipiente. Primer contacto, promesas de pago y seguimiento antes de escalar a pre-judicial."
     />
   );
 }

@@ -122,6 +122,7 @@ import { es } from 'date-fns/locale'
 | `fin_lineas_credito` | Líneas de crédito por cliente |
 | `fin_planes_financiacion` | Planes con tasas y tramos |
 | `fin_politicas_crediticias` | Políticas por segmento |
+| `fin_mora_acciones` | Acciones de cobranza, agenda operativa y trazabilidad de mora |
 | `fin_tipos_cliente` | Clasificación interna de clientes |
 | `fin_rubros` | Rubros del plan de cuentas |
 | `fin_cuentas` | Cuentas del plan de cuentas |
@@ -206,12 +207,13 @@ KPIs del día: cobros pendientes, créditos vencidos, cartera activa, cajas.
 
 ---
 
-### 6. Bandejas de Mora y Judiciales
-**Rutas:** `/acciones/mora-temprana` · `/acciones/judiciales`
+### 6. Control de Mora, Agenda y Judiciales
+**Rutas:** `/acciones/mora-temprana` · `/acciones/agenda` · `/acciones/judiciales`
 
-- **Mora temprana**: créditos con cuotas vencidas recientes (gestión preventiva)
-- **Judiciales**: operaciones (cheques y créditos) en estado judicial
-- Acciones directas desde la bandeja: registro de gestión, avance de estado
+- **Mora temprana**: clientes y operaciones en atraso inicial con seguimiento preventivo
+- **Agenda operativa**: acciones pendientes, programadas o vencidas con filtros por etapa, estado y responsable
+- **Judiciales**: operaciones (cheques y créditos) escaladas a circuito judicial
+- Acciones de cobranza sobre `fin_mora_acciones` con etapa, prioridad, responsable, próxima acción y timeline por cliente
 
 ---
 
