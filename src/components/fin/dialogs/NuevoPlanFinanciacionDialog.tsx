@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus, Trash2 } from "lucide-react";
 import type { FinPoliticaCrediticia } from "@/types/fin-politica-crediticia";
+import type { FinPlanFinanciacion } from "@/types/fin-plan-financiacion";
 import { ordenarTramos } from "@/lib/fin/planUtils";
 import { apiFetch } from "@/lib/apiFetch";
 import { Button } from "@/components/ui/button";
@@ -54,9 +55,25 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  initialPlan?: FinPlanFinanciacion | null;
 }
 
-export function NuevoPlanFinanciacionDialog({ open, onOpenChange, onSuccess }: Props) {
+const defaultValues: FormValues = {
+  nombre: "",
+  politica_id: "",
+  tasa_punitoria_mensual: 0,
+  cargo_fijo: undefined,
+  cargo_variable_pct: undefined,
+  activo: true,
+  tramos_tasa: [{ cantidad_cuotas: 1, tasa_mensual: 0 }],
+};
+
+export function NuevoPlanFinanciacionDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+  initialPlan,
+}: Props) {
   const [politicas, setPoliticas] = useState<FinPoliticaCrediticia[]>([]);
   const [loadingPoliticas, setLoadingPoliticas] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -71,10 +88,7 @@ export function NuevoPlanFinanciacionDialog({ open, onOpenChange, onSuccess }: P
     formState: { errors, isSubmitting },
   } = useForm<FormValues, unknown, SubmitValues>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      activo: true,
-      tramos_tasa: [{ cantidad_cuotas: 1, tasa_mensual: 0 }],
-    },
+    defaultValues,
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -103,11 +117,29 @@ export function NuevoPlanFinanciacionDialog({ open, onOpenChange, onSuccess }: P
       .finally(() => setLoadingPoliticas(false));
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    if (initialPlan) {
+      reset({
+        nombre: initialPlan.nombre,
+        politica_id: initialPlan.politica_id,
+        tasa_punitoria_mensual: initialPlan.tasa_punitoria_mensual,
+        cargo_fijo: initialPlan.cargo_fijo,
+        cargo_variable_pct: initialPlan.cargo_variable_pct,
+        activo: initialPlan.activo,
+        tramos_tasa:
+          initialPlan.tramos_tasa?.length > 0
+            ? ordenarTramos(initialPlan.tramos_tasa)
+            : [{ cantidad_cuotas: 1, tasa_mensual: 0 }],
+      });
+    } else {
+      reset(defaultValues);
+    }
+  }, [initialPlan, open, reset]);
+
   const close = () => {
-    reset({
-      activo: true,
-      tramos_tasa: [{ cantidad_cuotas: 1, tasa_mensual: 0 }],
-    });
+    reset(defaultValues);
     setServerError(null);
     onOpenChange(false);
   };
@@ -120,14 +152,21 @@ export function NuevoPlanFinanciacionDialog({ open, onOpenChange, onSuccess }: P
         tramos_tasa: ordenarTramos(formValues.tramos_tasa),
       };
 
-      const res = await apiFetch("/api/fin/planes-financiacion", {
-        method: "POST",
+      const endpoint = initialPlan?.id
+        ? `/api/fin/planes-financiacion/${initialPlan.id}`
+        : "/api/fin/planes-financiacion";
+
+      const res = await apiFetch(endpoint, {
+        method: initialPlan?.id ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error ?? "Error al crear plan");
+        throw new Error(
+          (body as { error?: string }).error ??
+            (initialPlan?.id ? "Error al actualizar plan" : "Error al crear plan")
+        );
       }
 
       close();
@@ -141,8 +180,12 @@ export function NuevoPlanFinanciacionDialog({ open, onOpenChange, onSuccess }: P
     <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : close())}>
       <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nuevo plan de financiacion</DialogTitle>
-          <DialogDescription>Define politica asociada, tasa punitoria y tramos por cantidad de cuotas.</DialogDescription>
+          <DialogTitle>
+            {initialPlan?.id ? "Editar plan de financiacion" : "Nuevo plan de financiacion"}
+          </DialogTitle>
+          <DialogDescription>
+            Define politica asociada, tasa punitoria y tramos por cantidad de cuotas.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="space-y-5">
@@ -282,7 +325,7 @@ export function NuevoPlanFinanciacionDialog({ open, onOpenChange, onSuccess }: P
               Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Guardando..." : "Guardar plan"}
+              {isSubmitting ? "Guardando..." : initialPlan?.id ? "Actualizar plan" : "Guardar plan"}
             </Button>
           </DialogFooter>
         </form>

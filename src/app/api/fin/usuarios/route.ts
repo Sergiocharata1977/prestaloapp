@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/firebase/admin";
+import { auth, getAdminFirestore } from "@/firebase/admin";
 import { withAuth } from "@/lib/api/withAuth";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +70,13 @@ export const POST = withAuth(async (request: NextRequest, _context, authData) =>
     }
 
     const role = body.role ?? "operador";
+    const db = getAdminFirestore();
+    const orgSnap = await db.collection("organizations").doc(authData.organizationId).get();
+    const orgCapabilities = Array.isArray(orgSnap.data()?.capabilities)
+      ? (orgSnap.data()?.capabilities as unknown[]).filter(
+          (item): item is string => typeof item === "string"
+        )
+      : [];
 
     const userRecord = await auth.createUser({
       email: body.email.trim(),
@@ -81,6 +88,7 @@ export const POST = withAuth(async (request: NextRequest, _context, authData) =>
       role,
       organizationId: authData.organizationId,
       admin: role === "admin",
+      capabilities: orgCapabilities,
     });
 
     return NextResponse.json(

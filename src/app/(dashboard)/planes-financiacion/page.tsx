@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { Pencil, Plus, RefreshCw } from "lucide-react";
 import type { FinPlanFinanciacion } from "@/types/fin-plan-financiacion";
 import type { FinPoliticaCrediticia } from "@/types/fin-politica-crediticia";
 import { apiFetch } from "@/lib/apiFetch";
@@ -10,7 +10,10 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { NuevoPlanFinanciacionDialog } from "@/components/fin/dialogs/NuevoPlanFinanciacionDialog";
 
-type PlanRow = FinPlanFinanciacion & { politica_nombre?: string };
+type PlanRow = FinPlanFinanciacion & {
+  politica_nombre?: string;
+  onEdit?: () => void;
+};
 
 const columns: Column<PlanRow>[] = [
   {
@@ -38,6 +41,21 @@ const columns: Column<PlanRow>[] = [
       </Badge>
     ),
   },
+  {
+    key: "acciones",
+    header: "Acciones",
+    render: (row) => (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() => row.onEdit?.()}
+      >
+        <Pencil className="h-3.5 w-3.5" />
+        Editar
+      </Button>
+    ),
+  },
 ];
 
 export default function PlanesFinanciacionPage() {
@@ -46,6 +64,7 @@ export default function PlanesFinanciacionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<FinPlanFinanciacion | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -83,6 +102,10 @@ export default function PlanesFinanciacionPage() {
     return planes.map((plan) => ({
       ...plan,
       politica_nombre: politicasMap.get(plan.politica_id) ?? plan.politica_id,
+      onEdit: () => {
+        setEditingPlan(plan);
+        setDialogOpen(true);
+      },
     }));
   }, [planes, politicas]);
 
@@ -98,7 +121,12 @@ export default function PlanesFinanciacionPage() {
             <RefreshCw className="h-4 w-4" />
             Refrescar
           </Button>
-          <Button onClick={() => setDialogOpen(true)}>
+          <Button
+            onClick={() => {
+              setEditingPlan(null);
+              setDialogOpen(true);
+            }}
+          >
             <Plus className="h-4 w-4" />
             Nuevo plan
           </Button>
@@ -113,7 +141,17 @@ export default function PlanesFinanciacionPage() {
 
       <DataTable columns={columns} data={rows} loading={loading} emptyMessage="No hay planes de financiacion cargados." />
 
-      <NuevoPlanFinanciacionDialog open={dialogOpen} onOpenChange={setDialogOpen} onSuccess={() => fetchData()} />
+      <NuevoPlanFinanciacionDialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setEditingPlan(null);
+          }
+        }}
+        onSuccess={() => fetchData()}
+        initialPlan={editingPlan}
+      />
     </div>
   );
 }
